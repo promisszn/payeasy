@@ -1,5 +1,4 @@
 import Link from "next/link";
-import RecentViewsDashboard from "../components/RecentViewsDashboard";
 
 export default function Home() {
   return (
@@ -57,8 +56,6 @@ export default function Home() {
           </p>
         </div>
       </div>
-
-      <RecentViewsDashboard />
     </main>
   );
 }

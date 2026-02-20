@@ -20,19 +20,35 @@ export async function GET(request: NextRequest) {
             .split(",")
             .map((a) => a.trim())
         : undefined,
-      search: searchParams.get("search") || undefined,
-      sortBy:
-        (searchParams.get("sortBy") as "price" | "created_at" | "bedrooms" | "bathrooms") ||
-        "created_at",
-      order: (searchParams.get("order") as "asc" | "desc") || "desc",
-      page: searchParams.get("page") ? Number(searchParams.get("page")) : 1,
-      limit: searchParams.get("limit") ? Number(searchParams.get("limit")) : 20,
-    };
+      maxPrice: searchParams.get('maxPrice')
+        ? Number(searchParams.get('maxPrice'))
+        : undefined,
+      location: searchParams.get('location') || undefined,
+      radius: searchParams.get('radius') || undefined,
+      bedrooms: searchParams.get('bedrooms')
+        ? Number(searchParams.get('bedrooms'))
+        : undefined,
+      bathrooms: searchParams.get('bathrooms')
+        ? Number(searchParams.get('bathrooms'))
+        : undefined,
+      amenities: searchParams.get('amenities')
+        ? searchParams.get('amenities')!.split(',').map((a) => a.trim())
+        : undefined,
+      search: searchParams.get('search') || undefined,
+      bbox: searchParams.get('bbox') || undefined,
+      sortBy: (searchParams.get('sortBy') as 'price' | 'created_at' | 'bedrooms' | 'bathrooms') || 'created_at',
+      order: (searchParams.get('order') as 'asc' | 'desc') || 'desc',
+      page: searchParams.get('page') ? Number(searchParams.get('page')) : 1,
+      limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : 20,
+    }
 
-    if (params.page! < 1) params.page = 1;
-    if (params.limit! < 1 || params.limit! > 100) params.limit = 20;
+    if (params.page! < 1) params.page = 1
+    if (params.limit! < 1 || params.limit! > 100) params.limit = 20
 
-    let query = supabase.from("listings").select("*", { count: "exact" }).eq("status", "active");
+    let query = supabase
+      .from('listings')
+      .select('*', { count: 'exact' })
+      .eq('status', 'active')
     if (params.minPrice !== undefined) {
       query = query.gte("rent_xlm", params.minPrice);
     }
@@ -77,6 +93,19 @@ export async function GET(request: NextRequest) {
         }
       } else {
         query = query.ilike("address", `%${params.location}%`);
+      }
+    }
+
+    // Bounding box filtering for map view
+    if (params.bbox) {
+      const coords = params.bbox.split(',').map(Number)
+      if (coords.length === 4 && coords.every((c) => !isNaN(c))) {
+        const [west, south, east, north] = coords
+        query = query
+          .gte('longitude', west)
+          .lte('longitude', east)
+          .gte('latitude', south)
+          .lte('latitude', north)
       }
     }
 
