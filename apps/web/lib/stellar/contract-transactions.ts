@@ -11,7 +11,7 @@ import {
   type xdr,
 } from "stellar-sdk";
 import { getStellarNetworkConfig, type StellarNetworkName } from "@/lib/stellar/network";
-import type { ContractTransactionStatus } from "@/lib/types/superbase";
+import type { ContractTransactionStatus } from "@/lib/types/supabase";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -109,10 +109,7 @@ function createSorobanServer(rpcUrl: string) {
   });
 }
 
-function extractGasFromSimulation(simulation: {
-  minResourceFee?: string | number;
-  transactionData?: unknown;
-}): GasEstimate | null {
+function extractGasFromSimulation(simulation: any): GasEstimate | null {
   const minResourceFee = Number(simulation.minResourceFee ?? 0);
   if (!Number.isFinite(minResourceFee) || minResourceFee <= 0) {
     return null;
@@ -134,6 +131,9 @@ function extractGasFromSimulation(simulation: {
     cpuInstructions: Number(transactionData?.resources?.()?.instructions?.() ?? 0),
     readBytes: Number(transactionData?.resources?.()?.readBytes?.() ?? 0),
     writeBytes: Number(transactionData?.resources?.()?.writeBytes?.() ?? 0),
+    cpuInstructions: Number((transactionData as any)?.resources?.()?.instructions?.() ?? 0),
+    readBytes: Number((transactionData as any)?.resources?.()?.readBytes?.() ?? 0),
+    writeBytes: Number((transactionData as any)?.resources?.()?.writeBytes?.() ?? 0),
   };
 }
 
@@ -206,6 +206,8 @@ export async function buildContractTransaction(
 
   const simulation = await server.simulateTransaction(initialTransaction);
   const simulationGasEstimate = extractGasFromSimulation(simulation as any);
+  const simulationGasEstimate =
+    "minResourceFee" in simulation ? extractGasFromSimulation(simulation) : null;
   const rpcGasEstimate = await estimateGasViaRpcMethod(rpcUrl, initialTransaction.toXDR());
 
   const rpcWithAssembler = SorobanRpc as unknown as {
@@ -243,9 +245,9 @@ export async function signContractTransaction(
   networkPassphrase: string
 ): Promise<string> {
   try {
-    const signed = await freighterSignTransaction(unsignedXdr, {
+    const signed = (await freighterSignTransaction(unsignedXdr, {
       networkPassphrase,
-    });
+    })) as string | { error?: string; signedTxXdr?: string };
 
     if (typeof signed === "string") {
       return signed;
@@ -253,6 +255,10 @@ export async function signContractTransaction(
 
     if (signed && typeof signed === "object") {
       const signedObj = signed as any;
+    // Cast signed to unknown to safely check properties on it
+    const signedObj = signed as unknown as Record<string, unknown>;
+
+    if (signedObj && typeof signedObj === "object") {
       if ("error" in signedObj && typeof signedObj.error === "string" && signedObj.error.length > 0) {
         throw new Error(signedObj.error);
       }
@@ -483,6 +489,7 @@ export async function getNetworkTransactionStatus(
     return {
       status: tx.successful ? "success" : "failed",
       ledger: tx.ledger as any as number,
+      ledger: tx.ledger_attr as number | undefined,
     };
   } catch {
     return {
