@@ -9,6 +9,8 @@ export const metadata: Metadata = {
     description: 'Secure, blockchain-powered rent sharing.',
 }
 
+import { AnalyticsTracker } from '@/components/AnalyticsTracker'
+
 export default function RootLayout({
     children,
 }: {
@@ -16,7 +18,10 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en">
-            <body className={`${inter.className} bg-slate-950 text-white min-h-screen`}>{children}</body>
+            <body className={`${inter.className} bg-slate-950 text-white min-h-screen`}>
+                <AnalyticsTracker />
+                {children}
+            </body>
         </html>
     )
 }

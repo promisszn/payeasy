@@ -6,6 +6,8 @@ import * as Slider from '@radix-ui/react-slider'
 import Select, { MultiValue, ActionMeta } from 'react-select'
 import debounce from 'lodash.debounce'
 import { X } from 'lucide-react'
+import { trackEvent } from '@/lib/analytics/tracking'
+import { AnalyticsEventName } from '@/lib/analytics/events'
 
 // Types
 type FilterState = {
@@ -128,6 +130,11 @@ export default function FilterSidebar() {
         if (newFilters.location) params.set('location', newFilters.location)
 
         router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+
+        trackEvent(AnalyticsEventName.FORM_SUBMIT, {
+            form_id: 'filters',
+            success: true,
+        })
     }, [pathname, router])
 
     // --- Debounced Updaters ---
@@ -144,6 +151,11 @@ export default function FilterSidebar() {
         const newFilters = { ...filters, minPrice: value[0], maxPrice: value[1] }
         setFilters(newFilters)
         debouncedUpdateURL(newFilters)
+        trackEvent(AnalyticsEventName.BUTTON_CLICK, {
+            button_id: 'price_range',
+            text: `Price: ${value[0]} - ${value[1]}`,
+            location: 'filter_sidebar',
+        })
     }
 
     const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,6 +192,11 @@ export default function FilterSidebar() {
     const clearFilters = () => {
         setFilters(INITIAL_FILTERS)
         updateURL(INITIAL_FILTERS)
+        trackEvent(AnalyticsEventName.BUTTON_CLICK, {
+            button_id: 'clear_filters',
+            text: 'Clear all',
+            location: 'filter_sidebar',
+        })
     }
 
     // Prevent hydration mismatch by returning skeleton or null until mounted
