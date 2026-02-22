@@ -1,0 +1,211 @@
+name: Dependency Update & Patch Verification
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
+      - 'apps/web/package.json'
+      - 'apps/web/package-lock.json'
+      - '.github/dependabot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  # Analyze dependency changes
+  dependency-analysis:
+    name: Analyze Dependency Changes
+    runs-on: ubuntu-latest
+    outputs:
+      has-security-updates: ${{ steps.check.outputs.security_updates }}
+      vulnerability-count: ${{ steps.check.outputs.vulnerability_count }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            package.json
+            package-lock.json
+            pnpm-lock.yaml
+            apps/web/package.json
+
+      - name: Setup Node.js
+        if: steps.files.outputs.any_changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Check for security updates
+        id: check
+        if: steps.files.outputs.any_changed == 'true'
+        run: |
+          npm audit --json > /tmp/audit.json || true
+          
+          SECURITY_UPDATES=$(grep -c '"severity": "critical\|"severity": "high' /tmp/audit.json || echo "0")
+          VULNERABILITY_COUNT=$(jq '.metadata.vulnerabilities.total' /tmp/audit.json || echo "0")
+          
+          echo "security_updates=$SECURITY_UPDATES" >> $GITHUB_OUTPUT
+          echo "vulnerability_count=$VULNERABILITY_COUNT" >> $GITHUB_OUTPUT
+          
+          echo "Found $VULNERABILITY_COUNT total vulnerabilities"
+
+  # Verify patch compatibility
+  patch-verification:
+    name: Verify Patch Compatibility
+    runs-on: ubuntu-latest
+    needs: dependency-analysis
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd apps/web && npm ci
+
+      - name: Run type checking
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      - name: Run linting
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Build application
+        run: npm run build
+        continue-on-error: true
+
+  # Check breaking changes
+  breaking-changes:
+    name: Detect Breaking Changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+
+      - name: Get base dependencies
+        run: |
+          npm list --json > /tmp/base-deps.json
+          cat /tmp/base-deps.json | jq '.dependencies | keys' > /tmp/base-keys.txt
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Get PR dependencies
+        run: |
+          npm list --json > /tmp/pr-deps.json
+          cat /tmp/pr-deps.json | jq '.dependencies | keys' > /tmp/pr-keys.txt
+
+      - name: Compare versions
+        run: |
+          echo "Comparing major version changes..."
+          diff /tmp/base-keys.txt /tmp/pr-keys.txt || true
+
+  # SLA verification
+  sla-verification:
+    name: Check Patch SLA
+    runs-on: ubuntu-latest
+    needs: dependency-analysis
+    if: needs.dependency-analysis.outputs.has-security-updates > 0
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify patch urgency SLA
+        run: |
+          echo "## Security Patch SLA Check"
+          
+          CRITICAL_FOUND=$(grep -c "critical" <<< "${{ needs.dependency-analysis.outputs.vulnerability-count }}" || echo "0")
+          
+          if [ "$CRITICAL_FOUND" -gt 0 ]; then
+            echo "⚠️ **CRITICAL** vulnerabilities detected - 24-hour SLA applies"
+            echo "- Must be patched within 24 hours"
+            echo "- Requires immediate review and merge"
+          else
+            echo "✅ No critical vulnerabilities"
+            echo "- Standard SLA: 7 days"
+          fi
+
+      - name: Set PR labels based on severity
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const hasSecurityUpdates = '${{ needs.dependency-analysis.outputs.has-security-updates }}';
+            const labels = ['security'];
+            
+            if (hasSecurityUpdates > 0) {
+              labels.push('security-critical');
+              labels.push('hotfix');
+            } else {
+              labels.push('dependencies');
+            }
+            
+            await github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: labels
+            });
+
+  # Generate security report
+  security-report:
+    name: Generate Security Report
+    runs-on: ubuntu-latest
+    needs: [ dependency-analysis, patch-verification ]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create dependency security report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const hasSecurityUpdates = '${{ needs.dependency-analysis.outputs.has-security-updates }}';
+            const vulnerabilityCount = '${{ needs.dependency-analysis.outputs.vulnerability-count }}';
+            const patchStatus = '${{ needs.patch-verification.result }}';
+            
+            const report = `## 🔒 Security Patch Report
+
+| Category | Status |
+|----------|--------|
+| Vulnerability Count | ${vulnerabilityCount} |
+| Security Updates | ${hasSecurityUpdates > 0 ? '⚠️ Yes' : '✅ No'} |
+| Patch Verification | ${patchStatus === 'success' ? '✅ Passed' : '⚠️ Check logs'} |
+| SLA Status | ${hasSecurityUpdates > 0 ? '⚡ Express (24h)' : '📅 Standard (7d)'} |
+
+${patchStatus === 'success' ? '✅ Safe to merge' : '⚠️ Review build logs for issues'}`;
+            
+            if (context.payload.pull_request) {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            }

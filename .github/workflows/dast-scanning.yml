@@ -1,0 +1,152 @@
+name: DAST - Dynamic Application Security Testing
+
+on:
+  schedule:
+    # Run DAST weekly on Monday at 3 AM UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL for DAST scan'
+        required: false
+        default: 'https://staging.payeasy.app'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dast-scan:
+    name: OWASP ZAP Dynamic Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: ${{ github.event.inputs.target_url || 'https://staging.payeasy.app' }}
+          rules_file_name: '.zap-baseline-rules.tsv'
+          cmd_options: '-a'
+          fail_action: false
+          allow_issue_writing: false
+
+      - name: Upload DAST report
+        uses: actions/upload-artifact@v3
+        with:
+          name: zap-scan-report
+          path: report_html.html
+          retention-days: 30
+        if: always()
+
+  # Continuous Deployment Security Check (Staging)
+  staging-health-check:
+    name: Staging Environment Security Health
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Check HTTPS configuration
+        run: |
+          curl -I https://staging.payeasy.app 2>/dev/null | head -20
+
+      - name: Check security headers
+        run: |
+          curl -I https://staging.payeasy.app 2>/dev/null | \
+          grep -E 'Strict-Transport-Security|X-Content-Type-Options|X-Frame-Options|Content-Security-Policy' || \
+          echo "⚠️ Missing security headers detected"
+
+      - name: SSL/TLS certificate check
+        run: |
+          echo | openssl s_client -servername staging.payeasy.app -connect staging.payeasy.app:443 2>/dev/null | \
+          openssl x509 -noout -text
+
+  # DAST with Nuclei (faster, modern scanner)
+  nuclei-dast:
+    name: Nuclei Dynamic Scanner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Nuclei scan
+        uses: projectdiscovery/nuclei-action@main
+        with:
+          target: ${{ github.event.inputs.target_url || 'https://staging.payeasy.app' }}
+          flags: -severity critical,high -json
+          output: nuclei-results.json
+        continue-on-error: true
+
+      - name: Upload Nuclei results
+        uses: actions/upload-artifact@v3
+        with:
+          name: nuclei-scan-results
+          path: nuclei-results.json
+          retention-days: 30
+        if: always()
+
+  # Performance & Security Metrics
+  performance-security:
+    name: Performance & Security Metrics
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          configPath: './lighthouserc.js'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+        # Lighthouse includes security audit
+        continue-on-error: true
+
+  # Dependency Vulnerability Matrix
+  vulnerability-matrix:
+    name: Build Vulnerability Matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate npm audit report
+        run: |
+          npm audit --json > audit-report.json || true
+          cat audit-report.json | \
+          jq '.metadata.vulnerabilities | 
+              {critical, high}' > vulnerability-summary.json
+
+      - name: Comment PR with vulnerability summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = JSON.parse(fs.readFileSync('vulnerability-summary.json', 'utf8'));
+            
+            const critical = summary.critical || 0;
+            const high = summary.high || 0;
+            
+            const comment = `## 📊 Dependency Vulnerability Report
+            
+            - **Critical**: ${critical}
+            - **High**: ${high}
+            
+            ${critical > 0 || high > 0 ? '⚠️ Vulnerabilities detected!' : '✅ No high-severity vulnerabilities'}`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
