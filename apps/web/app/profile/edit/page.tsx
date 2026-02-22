@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import useAuth from "../../../lib/hooks/useAuth";
 import { createBrowserClient } from "../../../lib/supabase/client";
 
@@ -93,8 +94,8 @@ export default function EditProfilePage() {
           <input id="avatar" type="file" accept="image/*" onChange={handleFileChange} className="mt-1 w-full text-sm text-gray-300" aria-describedby={uploading ? "avatar-uploading" : undefined} />
           {uploading && <div id="avatar-uploading" className="text-xs text-gray-400 mt-2" aria-live="polite">Uploading…</div>}
           {avatarUrl && (
-            <div className="mt-2">
-              <img src={avatarUrl} alt={`${user.username} avatar preview`} className="w-20 h-20 rounded-full object-cover" />
+            <div className="mt-2 relative w-20 h-20 rounded-full overflow-hidden">
+              <Image src={avatarUrl} alt={`${user.username} avatar preview`} fill className="object-cover" unoptimized />
             </div>
           )}
         </label>

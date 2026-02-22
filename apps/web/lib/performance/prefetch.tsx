@@ -94,11 +94,11 @@ class PrefetchManager {
 
     setInterval(() => {
       const now = Date.now();
-      this.cache.forEach((entry, key) => {
+      for (const [key, entry] of Array.from(this.cache.entries())) {
         if (now - entry.timestamp > entry.ttl) {
           this.cache.delete(key);
         }
-      });
+      }
     }, 60000); // Cleanup every minute
   }
 
@@ -174,7 +174,7 @@ class PrefetchManager {
       return;
     }
 
-    // Return existing pending request
+    // Wait for existing pending request
     if (this.pendingRequests.has(url)) {
       await this.pendingRequests.get(url);
       return;

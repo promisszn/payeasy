@@ -51,7 +51,8 @@ function StatusBadge({ status }: { status: string }) {
 // ---------------------------------------------------------------------------
 
 export default function PaymentPage() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = (typeof params?.id === 'string' ? params.id : params?.id?.[0]) ?? '';
   const router = useRouter();
 
   // State

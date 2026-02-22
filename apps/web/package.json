@@ -49,6 +49,7 @@
         "react-hook-form": "^7.71.1",
         "react-map-gl": "^7.1.9",
         "react-select": "^5.10.2",
+        "recharts": "^3.7.0",
         "resend": "^6.9.2",
         "sanitize-html": "^2.17.1",
         "sharp": "^0.34.5",

@@ -17,7 +17,7 @@ export default function PrivacyPolicyPage() {
                 <h2 className="text-2xl font-semibold mb-2">2. Your GDPR Rights</h2>
                 <ul className="list-disc ml-6 space-y-2">
                     <li><strong>Right to Access &amp; Export:</strong> You can request a full JSON or CSV export of all personal information we hold about you at any time via your account settings.</li>
-                    <li><strong>Right to Erasure ("Right to be Forgotten"):</strong> You may permanently delete your account and all associated personal records using the deletion tool in your account settings. This action is irreversible.</li>
+                    <li><strong>Right to Erasure (&quot;Right to be Forgotten&quot;):</strong> You may permanently delete your account and all associated personal records using the deletion tool in your account settings. This action is irreversible.</li>
                     <li><strong>Right to Withdraw Consent:</strong> Any consent given (e.g., for marketing or specific data processing) can be tracked and withdrawn freely.</li>
                 </ul>
             </section>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateCSV, generateExcel, generatePDF, trackReportGeneration } from '../../../../lib/exports/reports';
+import { generateCSV, generateExcel, trackReportGeneration } from '../../../../lib/exports/reports';
 
 export const runtime = 'nodejs';
 
@@ -18,8 +18,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing type or format parameters' }, { status: 400 });
         }
 
+        // PDF generation is temporarily disabled due to dependency issues
+        // Only CSV and Excel formats are supported
+        if (format === 'pdf') {
+            return NextResponse.json(
+                { error: 'PDF generation is temporarily unavailable. Please use CSV or Excel format.' },
+                { status: 503 }
+            );
+        }
+
         const data = await fetchReportData(type, filters);
-        let fileBuffer: Buffer | string;
+        let fileBuffer: Buffer | string = '';
         let contentType = '';
         let extension = '';
 
@@ -31,17 +40,14 @@ export async function POST(req: NextRequest) {
             fileBuffer = generateExcel(data);
             contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
             extension = 'xlsx';
-        } else if (format === 'pdf') {
-            fileBuffer = await generatePDF(data, `${type} Report`);
-            contentType = 'application/pdf';
-            extension = 'pdf';
         } else {
             return NextResponse.json({ error: 'Unsupported format' }, { status: 400 });
         }
 
         await trackReportGeneration(userId, type, format, JSON.stringify(filters || {}));
 
-        return new NextResponse(fileBuffer as any, {
+        const body: BodyInit = Buffer.isBuffer(fileBuffer) ? new Uint8Array(fileBuffer) : fileBuffer;
+        return new NextResponse(body, {
             status: 200,
             headers: {
                 'Content-Type': contentType,
