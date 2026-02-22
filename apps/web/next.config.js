@@ -22,10 +22,21 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
 
   webpack(config, { isServer }) {
+    config.resolve.alias = config.resolve.alias || {};
+
     // Tree-shake mapbox-gl CSS import on the server
     if (isServer) {
       config.resolve.alias["mapbox-gl/dist/mapbox-gl.css"] = false;
     }
+
+    // Create an alias for bidi-js to provide a default export wrapper
+    config.resolve.alias['bidi-js'] = require.resolve('./node_modules/bidi-js/dist/bidi.js');
+
+    // Also add to the externals to ensure proper resolution
+    if (!config.externals) config.externals = [];
+    config.externals.push({
+      'bidi-js': 'bidi-js',
+    });
 
     return config;
   },

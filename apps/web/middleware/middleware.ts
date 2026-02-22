@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { csrfMiddleware } from './csrf'
 
 export async function middleware(request: NextRequest) {
+  // Apply CSRF protection
+  const csrfResponse = await csrfMiddleware(request)
+  if (csrfResponse) return csrfResponse
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
