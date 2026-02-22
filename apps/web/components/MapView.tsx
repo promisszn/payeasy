@@ -14,9 +14,16 @@ import ListingPopup from './ListingPopup'
 import type { ListingPopupData } from './ListingPopup'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
-export interface MapListing extends ListingPopupData {
+export interface MapListing extends Partial<ListingPopupData> {
+    id: string
     latitude: number
     longitude: number
+    price: number
+    title?: string
+    location?: string
+    bedrooms?: number
+    bathrooms?: number
+    image?: string
 }
 
 interface ViewState {
@@ -32,7 +39,6 @@ interface MapViewProps {
     onViewStateChange?: (viewState: ViewState) => void
 }
 
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
 type PointProperties = MapListing
 type ClusterProperties = Supercluster.ClusterProperties
@@ -46,6 +52,7 @@ export default function MapView({
     onBoundsChange,
     onViewStateChange,
 }: MapViewProps) {
+    const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
     const [mounted, setMounted] = useState(false)
     const mapRef = useRef<MapRef>(null)
     const [viewState, setViewState] = useState<ViewState>(
@@ -262,11 +269,10 @@ export default function MapView({
                         anchor="bottom"
                     >
                         <div
-                            className={`cursor-pointer px-2 py-1 rounded-lg text-xs font-bold shadow-md transition-all hover:scale-110 whitespace-nowrap ${
-                                selectedListing?.id === listing.id
+                            className={`cursor-pointer px-2 py-1 rounded-lg text-xs font-bold shadow-md transition-all hover:scale-110 whitespace-nowrap ${selectedListing?.id === listing.id
                                     ? 'bg-primary text-white scale-110'
                                     : 'bg-white text-primary border border-gray-200'
-                            }`}
+                                }`}
                             onClick={() => setSelectedListing(listing)}
                         >
                             {listing.price} XLM

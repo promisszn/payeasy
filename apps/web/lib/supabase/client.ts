@@ -23,6 +23,9 @@ export function getSupabaseClient() {
   return browserClient;
 }
 
+// Alias for backward compatibility
+export const getClient = getSupabaseClient;
+
 export function resetClientInstance() {
   browserClient = null;
 }

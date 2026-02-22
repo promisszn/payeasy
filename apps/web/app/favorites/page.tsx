@@ -1,5 +1,8 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -25,7 +28,22 @@ export default function FavoritesPage() {
   const [favorites, setFavorites] = useState<FavoriteListing[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { isFavorited, isAuthenticated, isLoading: authLoading } = useFavoritesContext()
+  
+  let isFavorited: (id: string) => boolean
+  let isAuthenticated: boolean
+  let authLoading: boolean
+  
+  try {
+    const context = useFavoritesContext()
+    isFavorited = context.isFavorited
+    isAuthenticated = context.isAuthenticated
+    authLoading = context.isLoading
+  } catch {
+    // During build, provider might not be available
+    isFavorited = () => false
+    isAuthenticated = false
+    authLoading = true
+  }
 
   useEffect(() => {
     // Wait for auth check to complete

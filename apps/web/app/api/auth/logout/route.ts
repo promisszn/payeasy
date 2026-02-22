@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { successResponse } from "@/lib/api-utils";
 
 /**
  * POST /api/auth/logout
@@ -8,7 +7,10 @@ import { successResponse } from "@/lib/api-utils";
  * This route always succeeds, even if no user is logged in.
  */
 export async function POST() {
-  const response = successResponse({ message: "Logged out successfully" });
+  const response = NextResponse.json(
+    { success: true, data: { message: "Logged out successfully" } },
+    { status: 200 }
+  );
   
   // Clear the auth-token cookie by setting it with maxAge: 0
   response.cookies.set("auth-token", "", {

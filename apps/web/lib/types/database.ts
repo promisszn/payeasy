@@ -366,10 +366,10 @@ export interface PaymentRecord {
 /** Fields allowed when inserting a new payment record. */
 export type PaymentRecordInsert = Omit<
   PaymentRecordRow,
-  'id' | 'created_at'
+  'id' | 'created_at' | 'confirmed_at'
 > & {
   id?: string
-  confirmed_at?: ISOTimestamp
+  confirmed_at?: ISOTimestamp | null
 }
 
 /** Fields that can change after initial insert. */

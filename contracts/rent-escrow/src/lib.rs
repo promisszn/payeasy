@@ -6,7 +6,7 @@ pub struct RentContract;
 
 #[contractimpl]
 impl RentContract {
-    pub fn hello(env: Env, to: Symbol) -> Symbol {
+    pub fn hello(_env: Env, _to: Symbol) -> Symbol {
         symbol_short!("Hello")
     }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 type FavoritesContextValue = {
@@ -25,6 +26,7 @@ export default function FavoritesProvider({ children }: { children: React.ReactN
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const togglingRef = useRef<Set<string>>(new Set())
+  const router = useRouter()
 
   useEffect(() => {
     async function init() {
@@ -64,6 +66,7 @@ export default function FavoritesProvider({ children }: { children: React.ReactN
   const toggleFavorite = useCallback(
     async (listingId: string) => {
       if (!isAuthenticated) {
+        router.push('/login')
         window.location.href = '/auth/login'
         return
       }
@@ -117,7 +120,7 @@ export default function FavoritesProvider({ children }: { children: React.ReactN
         togglingRef.current.delete(listingId)
       }
     },
-    [isAuthenticated, favoriteIds]
+    [isAuthenticated, favoriteIds, router]
   )
 
   return (

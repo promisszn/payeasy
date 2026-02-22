@@ -32,6 +32,7 @@ export type BuildContractTransactionParams = {
   rpcUrl?: string;
   networkPassphrase?: string;
   timeoutSeconds?: number;
+  baseFee?: number;
 };
 
 export type BuiltContractTransaction = {
@@ -41,6 +42,7 @@ export type BuiltContractTransaction = {
   network: StellarNetworkName;
   networkPassphrase: string;
   rpcUrl: string;
+  feeStats?: SorobanRpc.GetFeeStatsResponse;
 };
 
 export type SubmittedTransaction = {
@@ -193,8 +195,18 @@ export async function buildContractTransaction(
 
   const args = (params.args ?? []).map((arg) => toScValArgument(arg));
 
+
+  let feeStats: SorobanRpc.GetFeeStatsResponse | undefined;
+  try {
+    feeStats = await server.getFeeStats();
+  } catch (e) {
+    console.warn("Failed to fetch fee stats, using default base fee", e);
+  }
+
+  const baseFee = params.baseFee ?? (feeStats ? Number(feeStats.inclusionFee.mode) : Number(BASE_FEE));
+
   const initialTransaction = new TransactionBuilder(account, {
-    fee: BASE_FEE,
+    fee: baseFee.toString(),
     networkPassphrase,
   })
     .addOperation(contract.call(params.method, ...args))
@@ -205,6 +217,10 @@ export async function buildContractTransaction(
   const simulationGasEstimate =
     "minResourceFee" in simulation ? extractGasFromSimulation(simulation) : null;
   const rpcGasEstimate = await estimateGasViaRpcMethod(rpcUrl, initialTransaction.toXDR());
+
+  const gasStroops = rpcGasEstimate?.stroops ?? simulationGasEstimate?.stroops ?? 0;
+  // Apply 20% buffer to resource fee as recommended
+  const resourceFeeWithBuffer = Math.ceil(gasStroops * 1.2);
 
   const rpcWithAssembler = SorobanRpc as unknown as {
     assembleTransaction?: (
@@ -217,7 +233,7 @@ export async function buildContractTransaction(
     prepareTransaction?: (transaction: typeof initialTransaction) => Promise<typeof initialTransaction>;
   }).prepareTransaction;
 
-  const preparedTransaction =
+  let preparedTransaction =
     typeof rpcWithAssembler.assembleTransaction === "function"
       ? rpcWithAssembler.assembleTransaction(initialTransaction, simulation).build()
       : typeof prepareTransaction === "function"
@@ -226,6 +242,26 @@ export async function buildContractTransaction(
           throw new Error("Soroban transaction assembly is unavailable for this stellar-sdk version.");
         })();
 
+  // Adjust fee with buffer and competitive base fee
+  if (resourceFeeWithBuffer > 0) {
+    const totalFee = baseFee + resourceFeeWithBuffer;
+    preparedTransaction = new TransactionBuilder(account, {
+      fee: totalFee.toString(),
+      networkPassphrase,
+    })
+      .addOperation(contract.call(params.method, ...args))
+      .setTimeout(params.timeoutSeconds ?? 60)
+      .build();
+    
+    // Note: Re-preparing or re-assembling might be needed if resource limits change, 
+    // but usually, they are stable for the same call.
+    if (typeof rpcWithAssembler.assembleTransaction === "function") {
+       preparedTransaction = rpcWithAssembler.assembleTransaction(preparedTransaction, simulation).build();
+    } else if (typeof prepareTransaction === "function") {
+       preparedTransaction = await prepareTransaction(preparedTransaction);
+    }
+  }
+
   return {
     unsignedXdr: preparedTransaction.toXDR(),
     feeStroops: Number(preparedTransaction.fee),
@@ -233,6 +269,7 @@ export async function buildContractTransaction(
     network: networkConfig.name,
     networkPassphrase,
     rpcUrl,
+    feeStats,
   };
 }
 

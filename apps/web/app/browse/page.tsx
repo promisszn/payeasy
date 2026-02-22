@@ -23,6 +23,7 @@ type Property = {
     type: string
     latitude: number
     longitude: number
+    rent_xlm?: number
 }
 
 const MOCK_PROPERTIES: Property[] = [
@@ -37,6 +38,7 @@ const MOCK_PROPERTIES: Property[] = [
         type: 'Entire Place',
         latitude: 25.7751,
         longitude: -80.1947,
+        rent_xlm: 3200,
     },
     {
         id: "mock-2",
@@ -49,6 +51,7 @@ const MOCK_PROPERTIES: Property[] = [
         type: 'Private Room',
         latitude: 25.7907,
         longitude: -80.1300,
+        rent_xlm: 1800,
     },
     {
         id: "mock-3",
@@ -61,6 +64,7 @@ const MOCK_PROPERTIES: Property[] = [
         type: 'Entire Place',
         latitude: 25.7588,
         longitude: -80.1936,
+        rent_xlm: 4500,
     },
     {
         id: "mock-4",
@@ -73,6 +77,7 @@ const MOCK_PROPERTIES: Property[] = [
         type: 'Entire Place',
         latitude: 25.7215,
         longitude: -80.2684,
+        rent_xlm: 2400,
     },
     {
         id: "mock-5",
@@ -85,6 +90,7 @@ const MOCK_PROPERTIES: Property[] = [
         type: 'Entire Place',
         latitude: 25.7270,
         longitude: -80.2409,
+        rent_xlm: 3800,
     },
     {
         id: "mock-6",
@@ -97,6 +103,7 @@ const MOCK_PROPERTIES: Property[] = [
         type: 'Private Room',
         latitude: 25.8051,
         longitude: -80.1996,
+        rent_xlm: 2900,
     }
 ]
 
@@ -116,9 +123,13 @@ export default function BrowsePage() {
     // Derived state from URL params to filter the mock data
     const [filteredProperties, setFilteredProperties] = useState<Property[]>(MOCK_PROPERTIES)
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+    const [loading, setLoading] = useState(false)
 
     // Bbox state for map view client-side filtering
     const [mapBbox, setMapBbox] = useState<[number, number, number, number] | null>(null)
+
+    const currentSortBy = searchParams?.get("sortBy") || "created_at";
+    const currentOrder = searchParams?.get("order") || "desc";
 
     // Sync view mode from URL
     useEffect(() => {
@@ -126,39 +137,76 @@ export default function BrowsePage() {
         setViewMode(v === 'map' ? 'map' : 'grid')
     }, [searchParams])
 
-    // A simple mock filtering logic (in reality this would be API call)
+    // Fetch listings from API (with fallback to mock data)
     useEffect(() => {
-        if (!searchParams) return
+        async function fetchListings() {
+            setLoading(true);
+            try {
+                const query = searchParams?.toString() || "";
+                const res = await fetch(`/api/listings/search?${query}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    // Transform API data to match Property interface if needed
+                    const listings = (data.listings || []).map((l: any) => ({
+                        id: l.id,
+                        title: l.title,
+                        price: l.rent_xlm,
+                        rent_xlm: l.rent_xlm,
+                        location: l.address,
+                        bedrooms: l.bedrooms,
+                        bathrooms: l.bathrooms,
+                        image: l.images && l.images.length > 0 ? l.images[0] : "/images/airbnb1.jpg",
+                        type: 'Entire Place', // Default type
+                        latitude: l.latitude || 0,
+                        longitude: l.longitude || 0,
+                    }));
+                    
+                    if (listings.length > 0) {
+                         setFilteredProperties(listings);
+                         return;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch listings", e);
+            } finally {
+                setLoading(false);
+            }
 
-        const minPrice = Number(searchParams.get('minPrice')) || 0
-        const maxPrice = Number(searchParams.get('maxPrice')) || 5000
-        const bedrooms = searchParams.get('bedrooms')
-        const bathrooms = searchParams.get('bathrooms')
-        const locationQuery = searchParams.get('location')
+            // Fallback to client-side filtering of mock data if API fails or returns empty
+            if (!searchParams) return
 
-        let filtered = MOCK_PROPERTIES.filter(p => {
-            const matchesPrice = p.price >= minPrice && p.price <= maxPrice
-            const matchesBeds = bedrooms ? p.bedrooms >= Number(bedrooms) : true
-            const matchesBaths = bathrooms ? p.bathrooms >= Number(bathrooms) : true
-            const matchesLocation = locationQuery
-                ? p.location.toLowerCase().includes(locationQuery.toLowerCase())
-                : true
+            const minPrice = Number(searchParams.get('minPrice')) || 0
+            const maxPrice = Number(searchParams.get('maxPrice')) || 5000
+            const bedrooms = searchParams.get('bedrooms')
+            const bathrooms = searchParams.get('bathrooms')
+            const locationQuery = searchParams.get('location')
 
-            return matchesPrice && matchesBeds && matchesBaths && matchesLocation
-        })
+            let filtered = MOCK_PROPERTIES.filter(p => {
+                const matchesPrice = p.price >= minPrice && p.price <= maxPrice
+                const matchesBeds = bedrooms ? p.bedrooms >= Number(bedrooms) : true
+                const matchesBaths = bathrooms ? p.bathrooms >= Number(bathrooms) : true
+                const matchesLocation = locationQuery
+                    ? p.location.toLowerCase().includes(locationQuery.toLowerCase())
+                    : true
 
-        // Apply bbox filtering when in map view
-        if (viewMode === 'map' && mapBbox) {
-            const [west, south, east, north] = mapBbox
-            filtered = filtered.filter(p =>
-                p.longitude >= west &&
-                p.longitude <= east &&
-                p.latitude >= south &&
-                p.latitude <= north
-            )
+                return matchesPrice && matchesBeds && matchesBaths && matchesLocation
+            })
+
+            // Apply bbox filtering when in map view
+            if (viewMode === 'map' && mapBbox) {
+                const [west, south, east, north] = mapBbox
+                filtered = filtered.filter(p =>
+                    p.longitude >= west &&
+                    p.longitude <= east &&
+                    p.latitude >= south &&
+                    p.latitude <= north
+                )
+            }
+
+            setFilteredProperties(filtered)
         }
-
-        setFilteredProperties(filtered)
+        
+        fetchListings();
     }, [searchParams, viewMode, mapBbox])
 
     const handleClearFilters = () => {
@@ -217,6 +265,27 @@ export default function BrowsePage() {
         },
         [buildParams, pathname, router]
     )
+    
+    const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        const url = new URL(window.location.href);
+
+        // Parse value like "price_desc"
+        if (value === "recommended") {
+            url.searchParams.set("sortBy", "recommended");
+            url.searchParams.set("order", "desc");
+        } else {
+            const parts = value.split("_");
+            const order = parts.pop() || "desc";
+            const sortBy = parts.join("_");
+
+            url.searchParams.set("sortBy", sortBy);
+            url.searchParams.set("order", order);
+        }
+
+        // Preserve other search params, just update sorting
+        window.location.href = url.pathname + url.search;
+    };
 
     // Build initial view state from URL params
     const initialViewState = useMemo(() => {
@@ -236,25 +305,18 @@ export default function BrowsePage() {
 
     // Map listings with coordinates for MapView
     const mapListings: MapListing[] = useMemo(() => {
-        if (!searchParams) return MOCK_PROPERTIES
-
-        const minPrice = Number(searchParams.get('minPrice')) || 0
-        const maxPrice = Number(searchParams.get('maxPrice')) || 5000
-        const bedrooms = searchParams.get('bedrooms')
-        const bathrooms = searchParams.get('bathrooms')
-        const locationQuery = searchParams.get('location')
-
-        return MOCK_PROPERTIES.filter(p => {
-            const matchesPrice = p.price >= minPrice && p.price <= maxPrice
-            const matchesBeds = bedrooms ? p.bedrooms >= Number(bedrooms) : true
-            const matchesBaths = bathrooms ? p.bathrooms >= Number(bathrooms) : true
-            const matchesLocation = locationQuery
-                ? p.location.toLowerCase().includes(locationQuery.toLowerCase())
-                : true
-
-            return matchesPrice && matchesBeds && matchesBaths && matchesLocation
-        })
-    }, [searchParams])
+        return filteredProperties.map(p => ({
+            id: String(p.id),
+            latitude: p.latitude,
+            longitude: p.longitude,
+            price: p.price,
+            title: p.title,
+            location: p.location,
+            bedrooms: p.bedrooms,
+            bathrooms: p.bathrooms,
+            image: p.image
+        }));
+    }, [filteredProperties])
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
@@ -281,6 +343,9 @@ export default function BrowsePage() {
                         {isDropdownOpen && (
                             <div className="absolute right-0 top-full pt-2 w-48 z-50">
                                 <div className="bg-white rounded-md shadow-lg py-1 border border-gray-100">
+                                    <Link href="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                        Dashboard
+                                    </Link>
                                     <Link href="/auth/login" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                         Login
                                     </Link>
@@ -312,8 +377,23 @@ export default function BrowsePage() {
                                 {filteredProperties.length} Properties Found
                             </h2>
                             <div className="flex items-center gap-4">
-                                <div className="text-sm text-gray-500 hidden sm:block">
-                                    Sort by: <span className="font-medium text-gray-900 cursor-pointer hover:text-primary transition-colors">Recommended</span>
+                                <div className="flex items-center gap-2 text-sm text-gray-500 mr-2">
+                                    <label htmlFor="sort-dropdown" className="hidden sm:block">Sort by:</label>
+                                    <select
+                                        id="sort-dropdown"
+                                        value={
+                                            currentSortBy === "recommended"
+                                            ? "recommended"
+                                            : `${currentSortBy}_${currentOrder}`
+                                        }
+                                        onChange={handleSortChange}
+                                        className="rounded-md border-gray-300 bg-white py-1 pl-2 pr-8 text-sm font-medium text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    >
+                                        <option value="created_at_desc">Newest First</option>
+                                        <option value="price_asc">Price: Low to High</option>
+                                        <option value="price_desc">Price: High to Low</option>
+                                        <option value="recommended">Recommended</option>
+                                    </select>
                                 </div>
                                 <ViewToggle view={viewMode} onChange={handleViewChange} />
                             </div>
@@ -374,7 +454,7 @@ export default function BrowsePage() {
                                                             </div>
                                                         </div>
                                                         <div className="text-right">
-                                                            <span className="text-lg font-bold text-primary">{property.price} XLM</span>
+                                                            <span className="text-lg font-bold text-primary">{property.rent_xlm || property.price} XLM</span>
                                                             <span className="text-xs text-gray-400 ml-1">/ mo</span>
                                                         </div>
                                                     </div>

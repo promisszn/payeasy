@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { RentContractService } from "@/services/rent-contract";
-import freighterApi from "@stellar/freighter-api";
+import { useWallet } from "@/hooks/useWallet";
+import { getFreighterPublicKey } from "@/lib/stellar/freighter";
 import { getStellarNetworkConfig } from "@/lib/stellar/network";
 import { getNetworkTransactionStatus } from "@/lib/stellar/contract-transactions";
 import { Loader2, AlertCircle, CheckCircle2, Wallet, ArrowRight, ExternalLink } from "lucide-react";
@@ -65,6 +66,14 @@ export default function PaymentPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [paymentRecordId, setPaymentRecordId] = useState<string | null>(null);
   const [networkName, setNetworkName] = useState<string>("Testnet");
+  const [feeDetails, setFeeDetails] = useState<{
+    baseFee: number;
+    resourceFee: number;
+    buffer: number;
+    totalFee: number;
+  } | null>(null);
+  const [isEstimatingFee, setIsEstimatingFee] = useState(false);
+  const { isConnected, publicKey: walletKey, connect } = useWallet();
 
   useEffect(() => {
     const config = getStellarNetworkConfig();
@@ -107,14 +116,35 @@ export default function PaymentPage() {
       setStatus("connecting");
       setError(null);
 
-      const isConnected = await freighterApi.isConnected();
       if (!isConnected) {
-        throw new Error("Freighter wallet not found. Please install it.");
+        await connect();
       }
 
-      const publicKey = await freighterApi.getPublicKey();
-      if (!publicKey) {
-        throw new Error("Could not retrieve public key.");
+      
+      // Fetch fee estimate
+      setIsEstimatingFee(true);
+      try {
+        const networkConfig = getStellarNetworkConfig();
+        const res = await fetch("/api/payments/estimate-fee", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contractId: listing.contractAddress,
+            method: "deposit",
+            args: [BigInt(listing.shareAmount * 10_000_000).toString()],
+            sourcePublicKey: walletKey || await getFreighterPublicKey(),
+            network: networkConfig.name,
+          }),
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setFeeDetails(data);
+        }
+      } catch (feeErr) {
+        console.error("Fee estimation error:", feeErr);
+      } finally {
+        setIsEstimatingFee(false);
       }
 
       // Show confirmation dialog
@@ -122,7 +152,7 @@ export default function PaymentPage() {
       setShowConfirm(true);
     } catch (e: any) {
       setStatus("failed");
-      setError(e.message);
+      setError(e.message || "Failed to connect wallet.");
     }
   };
 
@@ -132,7 +162,7 @@ export default function PaymentPage() {
     setError(null);
 
     try {
-      const publicKey = await freighterApi.getPublicKey();
+      const publicKey = walletKey || await getFreighterPublicKey();
       const networkConfig = getStellarNetworkConfig();
 
       // 1. Call Smart Contract
@@ -203,12 +233,29 @@ export default function PaymentPage() {
               <span className="text-white font-medium">{listing.shareAmount} XLM</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Network Fee</span>
-              <span className="text-white font-medium">~0.0001 XLM</span>
+              <span className="text-gray-400">Base Fee</span>
+              <span className="text-white font-medium">{(feeDetails?.baseFee ?? 100) / 10_000_000} XLM</span>
             </div>
+            {feeDetails && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Resource Fee</span>
+                  <span className="text-white font-medium">{feeDetails.resourceFee / 10_000_000} XLM</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Security Buffer (20%)</span>
+                  <span className="text-white font-medium">{feeDetails.buffer / 10_000_000} XLM</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between text-sm border-t border-white/10 pt-4">
-              <span className="text-gray-400">Total</span>
-              <span className="text-xl font-bold text-indigo-400">{listing.shareAmount} XLM</span>
+              <span className="text-gray-400">Total Payment</span>
+              <span className="text-xl font-bold text-indigo-400">
+                {(BigInt(listing.shareAmount * 10_000_000) + BigInt(feeDetails?.totalFee ?? 100)) / 10_000_000n === BigInt(listing.shareAmount) 
+                  ? listing.shareAmount 
+                  : Number(BigInt(listing.shareAmount * 10_000_000) + BigInt(feeDetails?.totalFee ?? 100)) / 10_000_000}{" "}
+                XLM
+              </span>
             </div>
           </div>
 
