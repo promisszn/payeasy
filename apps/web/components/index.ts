@@ -31,6 +31,22 @@ export {
 } from './Button'
 
 export {
+  Badge,
+  type BadgeProps,
+  type BadgeVariant,
+  type BadgeColor,
+  type BadgeSize,
+} from './Badge'
+
+export {
+  Tag,
+  type TagProps,
+  type TagVariant,
+  type TagColor,
+  type TagSize,
+} from './Tag'
+
+export {
   ButtonGroup,
   ButtonGroupItem,
   type ButtonGroupProps,
@@ -108,3 +124,51 @@ export {
   SingleImageGallery,
   ResponsiveGridGallery,
 } from './GalleryExamples'
+
+// Marketing Components
+export {
+  Hero,
+  type HeroProps,
+  type HeroHeight,
+  type HeroAlign,
+} from './Hero'
+
+export {
+  Banner,
+  type BannerProps,
+  type BannerVariant,
+} from './Banner'
+
+export {
+  Footer,
+  type FooterProps,
+  type FooterLinkGroup,
+  type FooterSocialLink,
+} from './Footer'
+
+export {
+  FooterSection,
+  type FooterSectionProps,
+  type FooterLinkItem,
+} from './FooterSection'
+
+// Layout Templates
+export {
+  Container,
+  Section,
+  TwoColumnLayout,
+  ThreeColumnLayout,
+  SidebarLayout,
+  GridLayout,
+  CONTAINER_WIDTH_CLASSES,
+  SECTION_SPACING_CLASSES,
+  type ContainerProps,
+  type SectionProps,
+  type ContainerWidth,
+  type SectionSpacing,
+  type LayoutGap,
+  type TwoColumnLayoutProps,
+  type ThreeColumnLayoutProps,
+  type SidebarLayoutProps,
+  type GridLayoutProps,
+} from './layouts'
