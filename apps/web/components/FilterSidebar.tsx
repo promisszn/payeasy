@@ -5,7 +5,8 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import * as Slider from "@radix-ui/react-slider";
 import Select, { MultiValue, ActionMeta } from "react-select";
 import debounce from "lodash.debounce";
-import { X } from "lucide-react";
+import Link from "next/link";
+import { X, List } from "lucide-react";
 
 // Types
 type FilterState = {
@@ -210,12 +211,21 @@ export default function FilterSidebar() {
     <div className="h-fit w-full max-w-sm rounded-xl border border-gray-100 bg-white p-6 shadow-lg">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-900">Filters</h2>
-        <button
-          onClick={clearFilters}
-          className="group flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-primary"
-        >
-          <X size={14} className="transition-transform group-hover:rotate-90" /> Clear all
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/listings"
+            className="group flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+          >
+            <List size={14} /> List All
+          </Link>
+          <div className="h-4 w-px bg-gray-200" />
+          <button
+            onClick={clearFilters}
+            className="group flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-primary"
+          >
+            <X size={14} className="transition-transform group-hover:rotate-90" /> Clear all
+          </button>
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -347,36 +357,36 @@ export default function FilterSidebar() {
               ...theme,
               colors: {
                 ...theme.colors,
-                primary: "#7D00FF",
+                primary: "var(--color-primary-500)",
               },
             })}
             styles={{
               control: (base, state) => ({
                 ...base,
-                borderColor: state.isFocused ? "#7D00FF" : "#E5E7EB",
-                boxShadow: state.isFocused ? "0 0 0 2px rgba(125, 0, 255, 0.2)" : "none",
+                borderColor: state.isFocused ? "var(--color-primary-500)" : "#E5E7EB",
+                boxShadow: state.isFocused ? "0 0 0 2px rgba(var(--color-primary-500), 0.2)" : "none",
                 borderRadius: "0.5rem",
                 minHeight: "42px",
                 "&:hover": {
-                  borderColor: state.isFocused ? "#7D00FF" : "#D1D5DB",
+                  borderColor: state.isFocused ? "var(--color-primary-500)" : "#D1D5DB",
                 },
               }),
               multiValue: (base) => ({
                 ...base,
-                backgroundColor: "#F3E8FF",
+                backgroundColor: "var(--color-primary-50)",
                 borderRadius: "0.25rem",
               }),
               multiValueLabel: (base) => ({
                 ...base,
-                color: "#7D00FF",
+                color: "var(--color-primary-500)",
                 fontWeight: 500,
               }),
               multiValueRemove: (base) => ({
                 ...base,
-                color: "#7D00FF",
+                color: "var(--color-primary-500)",
                 ":hover": {
-                  backgroundColor: "#E9D5FF",
-                  color: "#6B21A8",
+                  backgroundColor: "var(--color-primary-200)",
+                  color: "var(--color-primary-800)",
                 },
               }),
             }}

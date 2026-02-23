@@ -5,11 +5,13 @@ CREATE EXTENSION IF NOT EXISTS "postgis"; -- For location features
 -- USERS TABLE (Public Profile)
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email text,
   username TEXT UNIQUE,
-  email TEXT,
-  avatar_url TEXT,
-  bio TEXT,
-  public_key TEXT,
+  avatar_url TEXT NULL, 
+  first_name TEXT NULL,
+  last_name TEXT NULL,
+  bio TEXT NULL,
+  public_key TEXT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -17,9 +19,13 @@ CREATE TABLE IF NOT EXISTS users (
 -- LISTINGS TABLE
 CREATE TABLE IF NOT EXISTS listings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  landlord_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-  title TEXT NOT NULL,
-  description TEXT,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  landlord_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  title TEXT DEFAULT NULL,
+  description TEXT NULL,
+  price NUMERIC NOT NULL DEFAULT 0,
+  location TEXT DEFAULT NULL,
+  category TEXT DEFAULT NULL,
   address TEXT NOT NULL,
   rent_xlm NUMERIC NOT NULL,
   bedrooms INTEGER DEFAULT 0,
@@ -28,8 +34,8 @@ CREATE TABLE IF NOT EXISTS listings (
   status TEXT CHECK (status IN ('active', 'inactive', 'deleted')) DEFAULT 'active',
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- LISTING IMAGES

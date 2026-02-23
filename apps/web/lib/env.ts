@@ -8,6 +8,8 @@ const serverSchema = z.object({
   STELLAR_HORIZON_URL: z.string().url("Stellar Horizon URL must be valid").optional(),
   SOROBAN_RPC_URL: z.string().url("Soroban RPC URL must be valid").optional(),
   STELLAR_NETWORK_PASSPHRASE: z.string().optional(),
+  UPSTASH_REDIS_REST_URL: z.string().url("Upstash Redis URL must be valid").optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 });
 
 const clientSchema = z.object({
@@ -41,6 +43,8 @@ const getEnvVars = () => {
       STELLAR_HORIZON_URL: process.env.STELLAR_HORIZON_URL,
       SOROBAN_RPC_URL: process.env.SOROBAN_RPC_URL,
       STELLAR_NETWORK_PASSPHRASE: process.env.STELLAR_NETWORK_PASSPHRASE,
+      UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+      UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
       NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
@@ -79,6 +83,8 @@ const fallback = {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
   NEXT_PUBLIC_STELLAR_NETWORK: "testnet",
   NEXT_PUBLIC_FREIGHTER_NETWORK: "testnet",
+  UPSTASH_REDIS_REST_URL: "",
+  UPSTASH_REDIS_REST_TOKEN: "",
 };
 
 export const env = parsedEnv.success

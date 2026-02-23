@@ -11,7 +11,7 @@ import {
   type xdr,
 } from "stellar-sdk";
 import { getStellarNetworkConfig, type StellarNetworkName } from "@/lib/stellar/network";
-import type { ContractTransactionStatus } from "@/lib/types/superbase";
+import type { ContractTransactionStatus } from "@/lib/types/supabase";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -32,6 +32,7 @@ export type BuildContractTransactionParams = {
   rpcUrl?: string;
   networkPassphrase?: string;
   timeoutSeconds?: number;
+  baseFee?: number;
 };
 
 export type BuiltContractTransaction = {
@@ -41,6 +42,7 @@ export type BuiltContractTransaction = {
   network: StellarNetworkName;
   networkPassphrase: string;
   rpcUrl: string;
+  feeStats?: Record<string, unknown>;
 };
 
 export type SubmittedTransaction = {
@@ -109,10 +111,7 @@ function createSorobanServer(rpcUrl: string) {
   });
 }
 
-function extractGasFromSimulation(simulation: {
-  minResourceFee?: string | number;
-  transactionData?: unknown;
-}): GasEstimate | null {
+function extractGasFromSimulation(simulation: any): GasEstimate | null {
   const minResourceFee = Number(simulation.minResourceFee ?? 0);
   if (!Number.isFinite(minResourceFee) || minResourceFee <= 0) {
     return null;
@@ -120,20 +119,20 @@ function extractGasFromSimulation(simulation: {
 
   const transactionData = simulation.transactionData as
     | {
-        resources?: () => {
-          instructions?: () => unknown;
-          readBytes?: () => unknown;
-          writeBytes?: () => unknown;
-        };
-      }
+      resources?: () => {
+        instructions?: () => unknown;
+        readBytes?: () => unknown;
+        writeBytes?: () => unknown;
+      };
+    }
     | undefined;
 
   return {
     stroops: minResourceFee,
     source: "simulateTransaction",
-    cpuInstructions: Number(transactionData?.resources()?.instructions() ?? 0),
-    readBytes: Number(transactionData?.resources()?.readBytes() ?? 0),
-    writeBytes: Number(transactionData?.resources()?.writeBytes() ?? 0),
+    cpuInstructions: Number((transactionData as any)?.resources?.()?.instructions?.() ?? 0),
+    readBytes: Number((transactionData as any)?.resources?.()?.readBytes?.() ?? 0),
+    writeBytes: Number((transactionData as any)?.resources?.()?.writeBytes?.() ?? 0),
   };
 }
 
@@ -196,8 +195,19 @@ export async function buildContractTransaction(
 
   const args = (params.args ?? []).map((arg) => toScValArgument(arg));
 
+
+  let feeStats: Record<string, unknown> | undefined;
+  try {
+    feeStats = await (server as unknown as { getFeeStats: () => Promise<Record<string, unknown>> }).getFeeStats();
+  } catch (e) {
+    console.warn("Failed to fetch fee stats, using default base fee", e);
+  }
+
+  const parsedFeeStats = feeStats as { inclusionFee?: { mode?: string } } | undefined;
+  const baseFee = params.baseFee ?? (parsedFeeStats?.inclusionFee?.mode ? Number(parsedFeeStats.inclusionFee.mode) : Number(BASE_FEE));
+
   const initialTransaction = new TransactionBuilder(account, {
-    fee: BASE_FEE,
+    fee: baseFee.toString(),
     networkPassphrase,
   })
     .addOperation(contract.call(params.method, ...args))
@@ -205,8 +215,13 @@ export async function buildContractTransaction(
     .build();
 
   const simulation = await server.simulateTransaction(initialTransaction);
-  const simulationGasEstimate = extractGasFromSimulation(simulation);
+  const simulationGasEstimate =
+    "minResourceFee" in simulation ? extractGasFromSimulation(simulation) : null;
   const rpcGasEstimate = await estimateGasViaRpcMethod(rpcUrl, initialTransaction.toXDR());
+
+  const gasStroops = rpcGasEstimate?.stroops ?? simulationGasEstimate?.stroops ?? 0;
+  // Apply 20% buffer to resource fee as recommended
+  const resourceFeeWithBuffer = Math.ceil(gasStroops * 1.2);
 
   const rpcWithAssembler = SorobanRpc as unknown as {
     assembleTransaction?: (
@@ -219,14 +234,34 @@ export async function buildContractTransaction(
     prepareTransaction?: (transaction: typeof initialTransaction) => Promise<typeof initialTransaction>;
   }).prepareTransaction;
 
-  const preparedTransaction =
+  let preparedTransaction =
     typeof rpcWithAssembler.assembleTransaction === "function"
       ? rpcWithAssembler.assembleTransaction(initialTransaction, simulation).build()
       : typeof prepareTransaction === "function"
         ? await prepareTransaction(initialTransaction)
         : (() => {
-            throw new Error("Soroban transaction assembly is unavailable for this stellar-sdk version.");
-          })();
+          throw new Error("Soroban transaction assembly is unavailable for this stellar-sdk version.");
+        })();
+
+  // Adjust fee with buffer and competitive base fee
+  if (resourceFeeWithBuffer > 0) {
+    const totalFee = baseFee + resourceFeeWithBuffer;
+    preparedTransaction = new TransactionBuilder(account, {
+      fee: totalFee.toString(),
+      networkPassphrase,
+    })
+      .addOperation(contract.call(params.method, ...args))
+      .setTimeout(params.timeoutSeconds ?? 60)
+      .build();
+    
+    // Note: Re-preparing or re-assembling might be needed if resource limits change, 
+    // but usually, they are stable for the same call.
+    if (typeof rpcWithAssembler.assembleTransaction === "function") {
+       preparedTransaction = rpcWithAssembler.assembleTransaction(preparedTransaction, simulation).build();
+    } else if (typeof prepareTransaction === "function") {
+       preparedTransaction = await prepareTransaction(preparedTransaction);
+    }
+  }
 
   return {
     unsignedXdr: preparedTransaction.toXDR(),
@@ -235,6 +270,7 @@ export async function buildContractTransaction(
     network: networkConfig.name,
     networkPassphrase,
     rpcUrl,
+    feeStats,
   };
 }
 
@@ -243,21 +279,24 @@ export async function signContractTransaction(
   networkPassphrase: string
 ): Promise<string> {
   try {
-    const signed = await freighterSignTransaction(unsignedXdr, {
+    const signed = (await freighterSignTransaction(unsignedXdr, {
       networkPassphrase,
-    });
+    })) as string | { error?: string; signedTxXdr?: string };
 
     if (typeof signed === "string") {
       return signed;
     }
 
-    if (signed && typeof signed === "object") {
-      if ("error" in signed && typeof signed.error === "string" && signed.error.length > 0) {
-        throw new Error(signed.error);
+    // Cast signed to unknown to safely check properties on it
+    const signedObj = signed as unknown as Record<string, unknown>;
+
+    if (signedObj && typeof signedObj === "object") {
+      if ("error" in signedObj && typeof signedObj.error === "string" && signedObj.error.length > 0) {
+        throw new Error(signedObj.error);
       }
 
-      if ("signedTxXdr" in signed && typeof signed.signedTxXdr === "string") {
-        return signed.signedTxXdr;
+      if ("signedTxXdr" in signedObj && typeof signedObj.signedTxXdr === "string") {
+        return signedObj.signedTxXdr;
       }
     }
 
@@ -481,7 +520,7 @@ export async function getNetworkTransactionStatus(
     const tx = await horizonServer.transactions().transaction(transactionHash).call();
     return {
       status: tx.successful ? "success" : "failed",
-      ledger: tx.ledger,
+      ledger: tx.ledger_attr as number | undefined,
     };
   } catch {
     return {

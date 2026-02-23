@@ -1,8 +1,21 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { csrfMiddleware } from './csrf'
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+/**
+ * Runs CSRF check, then auth logic: Supabase session refresh and dashboard protection.
+ * If response is provided, uses it for cookie updates (so root middleware can inject x-nonce via request headers). Otherwise creates NextResponse.next({ request }).
+ * Returns the response to send.
+ */
+export async function runAuthMiddleware(
+  request: NextRequest,
+  response?: NextResponse
+): Promise<NextResponse> {
+  const csrfResponse = await csrfMiddleware(request)
+  if (csrfResponse) return csrfResponse
+
+  const res = response ?? NextResponse.next({ request })
+  let supabaseResponse = res
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,7 +29,7 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
-          supabaseResponse = NextResponse.next({ request })
+          if (!response) supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )

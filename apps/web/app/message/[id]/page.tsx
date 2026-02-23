@@ -8,7 +8,7 @@ type Message = {
     content: string
     senderId: string
     senderName?: string
-    createdAt: string;
+    createdAt: string
     readAt?: string | null
     status?: 'sending' | 'sent' | 'failed'
 }
@@ -39,7 +39,8 @@ const formatTime = (timestamp: string) => {
 }
 
 export default function ConversationDetailPage() {
-    const { id } = useParams<{ id: string }>()
+    const params = useParams<{ id: string }>()
+    const id = params?.id ?? ''
     const [messages, setMessages] = useState<Message[]>([])
     const [currentUserId, setCurrentUserId] = useState<string>('')
     const [title, setTitle] = useState<string>('Conversation')

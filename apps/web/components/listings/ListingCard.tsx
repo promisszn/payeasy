@@ -17,21 +17,22 @@ type CardListing = Listing & {
 }
 
 interface ListingCardProps {
-    listing: CardListing
+    listing: CardListing | ListingWithLandlord
     /** Hide comparison button (e.g., on comparison page) */
     hideCompare?: boolean
 }
 
 export default function ListingCard({ listing, hideCompare = false }: ListingCardProps) {
     // Use the first image from the array or fallback
-    const imageUrl = listing.images && listing.images.length > 0 
-        ? listing.images[0] 
+    const images = (listing as any).images || [];
+    const imageUrl = images.length > 0 
+        ? images[0] 
         : '/images/airbnb1.jpg' // Ensure this fallback exists in public/images
 
     return (
-        <Link href={`/listings/${listing.id}`} className="block h-full group">
+        <div className="block h-full group">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col h-full">
-                <div className="relative h-56 w-full overflow-hidden bg-gray-100">
+                <Link href={`/listings/${listing.id}`} className="relative h-56 w-full overflow-hidden bg-gray-100 block">
                     <Image
                         src={imageUrl}
                         alt={listing.title}
@@ -45,10 +46,10 @@ export default function ListingCard({ listing, hideCompare = false }: ListingCar
                             <CompareButtonIcon listing={listing} />
                         )}
                     </div>
-                </div>
+                </Link>
                 <div className="p-5 flex flex-col flex-1">
-                    <div className="flex justify-between items-start mb-2">
-                        <div className="w-full">
+                    <div className="flex justify-between items-start mb-2 gap-2">
+                        <Link href={`/listings/${listing.id}`} className="w-full">
                             <h3 className="font-semibold text-gray-900 text-lg leading-tight mb-1 group-hover:text-primary transition-colors line-clamp-1">
                                 {listing.title}
                             </h3>
@@ -61,7 +62,12 @@ export default function ListingCard({ listing, hideCompare = false }: ListingCar
                                     Hosted by {listing.landlord.username}
                                 </div>
                             )}
-                        </div>
+                        </Link>
+                        <Link href={`/listings/${listing.id}`} className="shrink-0">
+                            <button className="px-3 py-1.5 bg-primary/10 text-primary text-xs font-semibold rounded-lg hover:bg-primary hover:text-white transition-colors">
+                                Detail List
+                            </button>
+                        </Link>
                     </div>
 
                     <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between text-gray-600 text-sm">
@@ -82,6 +88,6 @@ export default function ListingCard({ listing, hideCompare = false }: ListingCar
                     </div>
                 </div>
             </div>
-        </Link>
+        </div>
     )
 }
