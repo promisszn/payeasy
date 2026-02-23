@@ -18,9 +18,9 @@ export default function ListingCard({ listing }: ListingCardProps) {
         : '/images/airbnb1.jpg' // Ensure this fallback exists in public/images
 
     return (
-        <Link href={`/listings/${listing.id}`} className="block h-full group">
+        <div className="block h-full group">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col h-full">
-                <div className="relative h-56 w-full overflow-hidden bg-gray-100">
+                <Link href={`/listings/${listing.id}`} className="relative h-56 w-full overflow-hidden bg-gray-100 block">
                     <Image
                         src={imageUrl}
                         alt={listing.title}
@@ -31,10 +31,10 @@ export default function ListingCard({ listing }: ListingCardProps) {
                     <div className="absolute top-3 left-3 z-10" onClick={(e) => e.preventDefault()}>
                         <FavoriteButton listingId={listing.id} />
                     </div>
-                </div>
+                </Link>
                 <div className="p-5 flex flex-col flex-1">
-                    <div className="flex justify-between items-start mb-2">
-                        <div className="w-full">
+                    <div className="flex justify-between items-start mb-2 gap-2">
+                        <Link href={`/listings/${listing.id}`} className="w-full">
                             <h3 className="font-semibold text-gray-900 text-lg leading-tight mb-1 group-hover:text-primary transition-colors line-clamp-1">
                                 {listing.title}
                             </h3>
@@ -47,7 +47,12 @@ export default function ListingCard({ listing }: ListingCardProps) {
                                     Hosted by {listing.landlord.username}
                                 </div>
                             )}
-                        </div>
+                        </Link>
+                        <Link href={`/listings/${listing.id}`} className="shrink-0">
+                            <button className="px-3 py-1.5 bg-primary/10 text-primary text-xs font-semibold rounded-lg hover:bg-primary hover:text-white transition-colors">
+                                Detail List
+                            </button>
+                        </Link>
                     </div>
 
                     <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between text-gray-600 text-sm">
@@ -68,6 +73,6 @@ export default function ListingCard({ listing }: ListingCardProps) {
                     </div>
                 </div>
             </div>
-        </Link>
+        </div>
     )
 }
