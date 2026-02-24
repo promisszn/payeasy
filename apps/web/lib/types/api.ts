@@ -232,6 +232,17 @@ export type RegisterUserBody = Pick<
   email?: string
 }
 
+
+/** Response shape for GET /api/users/:id/stats. */
+export interface UserStatsResponse {
+  listings_count: number
+  messages_sent_count: number
+  messages_received_count: number
+  rent_payments_made_count: number
+  unread_messages_count: number
+  active_agreements_count: number
+}
+
 /** Request body for PATCH /api/users/:id. */
 export type UpdateUserBody = Partial<
   Pick<User, 'username' | 'email' | 'avatar_url' | 'bio'>
