@@ -61,3 +61,21 @@ export interface ListingSearchResult {
   limit: number;
   totalPages: number;
 }
+
+export interface Rating {
+  id: string
+  rater_id: string
+  ratee_id: string
+  listing_id?: string
+  interaction_id?: string
+  rating: number
+  review_text?: string
+  is_verified: boolean
+  status: 'published' | 'flagged' | 'archived'
+  created_at: string
+  updated_at: string
+  rater?: {
+    full_name: string
+    avatar_url: string
+  }
+}
