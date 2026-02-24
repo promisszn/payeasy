@@ -35,8 +35,7 @@
     "install:web": "cd apps/web && npm install",
     "build:contract": "cd apps/web && npm run build:contract",
     "deploy:contract": "cd apps/web && npm run deploy:contract",
-    "verify:contract": "cd apps/web && npm run verify:contract",
-    "postinstall": "npm run install:web"
+    "verify:contract": "cd apps/web && npm run verify:contract"
   },
   "dependencies": {
     "bidi-js": "^1.0.3",
