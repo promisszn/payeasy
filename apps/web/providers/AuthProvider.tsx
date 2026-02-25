@@ -323,39 +323,32 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   /**
-   * Register a new user.
-   * Creates a user account with the provided data.
+   * Register a new user via /api/auth/register.
+   * On success, the server sets an auth-token cookie so the user is
+   * immediately authenticated.
    */
   const register = useCallback(async (data: RegisterData): Promise<User> => {
-    try {
-      const response = await fetch('/api/users/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
 
-      if (!response.ok) {
-        throw new Error('Registration failed')
-      }
+    const result = await response.json()
 
-      const result = await response.json()
-      
-      if (result.error) {
-        throw new Error(result.error.message)
-      }
-
-      const newUser = result.data as User
-      
-      // After registration, automatically log in
-      setUser(newUser)
-      setPublicKey(newUser.public_key)
-      setStoredUser(newUser)
-      
-      return newUser
-    } catch (error) {
-      console.error('Registration error:', error)
-      throw error
+    if (!response.ok) {
+      const message =
+        result?.error ?? result?.data?.error ?? 'Registration failed'
+      throw new Error(typeof message === 'string' ? message : JSON.stringify(message))
     }
+
+    const newUser = result.data as User
+
+    setUser(newUser)
+    setPublicKey(newUser.public_key)
+    setStoredUser(newUser)
+
+    return newUser
   }, [])
 
   const value = {
