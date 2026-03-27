@@ -26,14 +26,20 @@ pub enum DataKey {
     Escrow,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoommateState {
+    pub expected: i128,
+    pub paid: i128,
+}
+
 /// The rent escrow data structure.
 #[contracttype]
 #[derive(Clone)]
 pub struct RentEscrow {
     pub landlord: Address,
     pub rent_amount: i128,
-    pub roommates: Map<Address, i128>,
-    pub contributions: Map<Address, i128>,
+    pub roommates: Map<Address, RoommateState>,
 }
 
 #[contract]
@@ -57,11 +63,18 @@ impl RentEscrowContract {
             return Err(Error::InvalidAmount);
         }
 
+        let mut roommate_states = Map::new(&env);
+        for (address, expected) in roommates.iter() {
+            roommate_states.set(address, RoommateState {
+                expected,
+                paid: 0,
+            });
+        }
+
         env.storage().persistent().set(&DataKey::Escrow, &RentEscrow {
             landlord,
             rent_amount,
-            roommates,
-            contributions: Map::new(&env),
+            roommates: roommate_states,
         });
 
         Ok(())
@@ -80,12 +93,9 @@ impl RentEscrowContract {
             .get(&DataKey::Escrow)
             .expect("escrow not initialized");
 
-        if !escrow.roommates.contains_key(from.clone()) {
-            return Err(Error::InvalidAmount);
-        }
-
-        let current: i128 = escrow.contributions.get(from.clone()).unwrap_or(0);
-        escrow.contributions.set(from.clone(), current + amount);
+        let mut state = escrow.roommates.get(from.clone()).ok_or(Error::InvalidAmount)?;
+        state.paid += amount;
+        escrow.roommates.set(from.clone(), state);
 
         env.storage().persistent().set(&DataKey::Escrow, &escrow);
 
@@ -100,24 +110,21 @@ impl RentEscrowContract {
             .expect("escrow not initialized");
 
         let mut total: i128 = 0;
-        for (_, amount) in escrow.contributions.iter() {
-            total += amount;
+        for (_, state) in escrow.roommates.iter() {
+            total += state.paid;
         }
         total
     }
 
     /// Check whether the total contributions meet or exceed the rent goal.
     pub fn is_fully_funded(env: Env) -> bool {
+        let total_funded = Self::get_total_funded(env);
         let escrow: RentEscrow = env.storage()
             .persistent()
             .get(&DataKey::Escrow)
             .expect("escrow not initialized");
 
-        let mut total: i128 = 0;
-        for (_, amount) in escrow.contributions.iter() {
-            total += amount;
-        }
-        total >= escrow.rent_amount
+        total_funded >= escrow.rent_amount
     }
 
     /// Release total rent to the landlord if fully funded.
@@ -156,6 +163,19 @@ impl RentEscrowContract {
             .get(&DataKey::Escrow);
         match result {
             Some(escrow) => escrow.rent_amount,
+            None => 0,
+        }
+    }
+
+    /// Retrieve the paid balance for a specific roommate.
+    pub fn get_balance(env: Env, from: Address) -> i128 {
+        let escrow: RentEscrow = env.storage()
+            .persistent()
+            .get(&DataKey::Escrow)
+            .expect("escrow not initialized");
+
+        match escrow.roommates.get(from) {
+            Some(state) => state.paid,
             None => 0,
         }
     }

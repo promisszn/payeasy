@@ -72,3 +72,17 @@ fn test_is_fully_funded_with_overfunding() {
     assert_eq!(client.get_total_funded(), 1100_i128);
     assert_eq!(client.is_fully_funded(), true);
 }
+
+#[test]
+fn test_get_balance() {
+    let env = Env::default();
+    let (client, _, roommate_a, _) = setup_escrow(&env);
+
+    assert_eq!(client.get_balance(&roommate_a), 0_i128);
+
+    client.contribute(&roommate_a, &200_i128);
+    assert_eq!(client.get_balance(&roommate_a), 200_i128);
+
+    client.contribute(&roommate_a, &150_i128);
+    assert_eq!(client.get_balance(&roommate_a), 350_i128);
+}
