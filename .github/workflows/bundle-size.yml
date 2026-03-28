@@ -16,12 +16,6 @@ jobs:
         uses: actions/checkout@v4
 
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: "npm"
-          cache-dependency-path: ./apps/web/package-lock.json
 
       - name: Check if apps/web exists
         id: web-exists
@@ -31,6 +25,14 @@ jobs:
           else
             echo "::set-output name=exists::false"
           fi
+
+      - name: Setup Node.js
+        if: steps.web-exists.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: ./apps/web/package-lock.json
 
       - name: Clean caches
         if: steps.web-exists.outputs.exists == 'true'
