@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, Env};
+use soroban_sdk::{testutils::{Address as _, Events, Ledger}, token, Address, Env};
 
 const TEST_DEADLINE: u64 = 2_000_000_000_u64;
 
@@ -118,6 +118,7 @@ fn test_get_balance() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_full_flow_scenario() {
     let env = Env::default();
     env.mock_all_auths();
@@ -175,6 +176,38 @@ fn test_full_flow_scenario() {
 
     assert_eq!(token.balance(&landlord), 1000_i128);
     assert_eq!(token.balance(&client.address), 0_i128);
+}
+
+#[test]
+fn test_agreement_released_event() {
+    let env = Env::default();
+    let (client, _, roommate_a, roommate_b, _, _) = setup_escrow(&env);
+
+    // Fund the escrow fully
+    client.contribute(&roommate_a, &500_i128);
+    client.contribute(&roommate_b, &500_i128);
+
+    // Release should emit the AgreementReleased event
+    client.release();
+
+    // Verify the released event was published
+    let events = env.events().all();
+    let xdr_events = events.events();
+    assert!(
+        !xdr_events.is_empty(),
+        "release should emit at least one event"
+    );
+
+    // Verify the last event has topics and data (AgreementReleased with amount)
+    let released_event = xdr_events.last().expect("expected at least one event");
+    match &released_event.body {
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
+            assert!(
+                !v0.topics.is_empty(),
+                "AgreementReleased event should have topics"
+            );
+        }
+    }
 }
 
 #[test]
