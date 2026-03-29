@@ -8,6 +8,9 @@ pub const MIN_RENT: i128 = 100;
 /// (24 * 60 * 60) / 5 = 17280
 pub const DAY_IN_LEDGERS: u32 = 17280;
 
+pub const BUMP_THRESHOLD: u32 = 30 * DAY_IN_LEDGERS;
+pub const BUMP_AMOUNT: u32 = 60 * DAY_IN_LEDGERS;
+
 /// Error types for the rent escrow contract.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -92,6 +95,9 @@ impl RentEscrowContract {
 
         env.storage().persistent().set(&DataKey::Deadline, &deadline);
 
+        env.storage().persistent().extend_ttl(&DataKey::Escrow, BUMP_THRESHOLD, BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(&DataKey::Deadline, BUMP_THRESHOLD, BUMP_AMOUNT);
+
         Ok(())
     }
 
@@ -123,6 +129,7 @@ impl RentEscrowContract {
         });
 
         env.storage().persistent().set(&DataKey::Escrow, &escrow);
+        env.storage().persistent().extend_ttl(&DataKey::Escrow, BUMP_THRESHOLD, BUMP_AMOUNT);
 
         Ok(())
     }
@@ -152,6 +159,7 @@ impl RentEscrowContract {
         token_client.transfer(&from, &env.current_contract_address(), &amount);
 
         env.storage().persistent().set(&DataKey::Escrow, &escrow);
+        env.storage().persistent().extend_ttl(&DataKey::Escrow, BUMP_THRESHOLD, BUMP_AMOUNT);
 
         Ok(())
     }
@@ -195,6 +203,9 @@ impl RentEscrowContract {
         let total_funded = Self::get_total_funded(env.clone());
         let token_client = token::Client::new(&env, &escrow.token_address);
         token_client.transfer(&env.current_contract_address(), &escrow.landlord, &total_funded);
+
+        env.storage().persistent().extend_ttl(&DataKey::Escrow, BUMP_THRESHOLD, BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(&DataKey::Deadline, BUMP_THRESHOLD, BUMP_AMOUNT);
 
         Ok(())
     }
@@ -281,6 +292,9 @@ impl RentEscrowContract {
 
         let token_client = token::Client::new(&env, &escrow.token_address);
         token_client.transfer(&env.current_contract_address(), &from, &refund_amount);
+
+        env.storage().persistent().extend_ttl(&DataKey::Escrow, BUMP_THRESHOLD, BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(&DataKey::Deadline, BUMP_THRESHOLD, BUMP_AMOUNT);
 
         Ok(())
     }
