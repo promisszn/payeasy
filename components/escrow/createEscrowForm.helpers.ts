@@ -1,3 +1,5 @@
+import type { SupportedToken } from "../../lib/stellar/config.ts";
+
 export const MIN_ESCROW_STEP = 1;
 export const MAX_ESCROW_STEP = 4;
 
@@ -9,7 +11,7 @@ export interface RoommateInputValue {
 
 export interface EscrowFormDraft {
   totalRent: string;
-  tokenId: string;
+  tokenAddress: string;
   deadlineDate: string;
   roommates: RoommateInputValue[];
 }
@@ -97,8 +99,8 @@ export function validateEscrowStep(
       errors.push("Total rent must be greater than zero.");
     }
 
-    if (!draft.tokenId.trim()) {
-      errors.push("Select or enter a payment token.");
+    if (!draft.tokenAddress.trim()) {
+      errors.push("Select a supported payment token.");
     }
   }
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createEscrow } from "@/lib/mock/escrow";
 
+import { getSupportedTokenByIssuer } from "@/lib/stellar/config";
 import { getExplorerLink, type ExplorerProvider } from "@/lib/stellar/explorer";
 import { getFeeStats } from "@/lib/stellar/queries";
 
@@ -26,7 +27,7 @@ import {
 
 interface InitializeEscrowParams {
   totalRent: string;
-  tokenId: string;
+  tokenAddress: string;
   deadlineLedgerTimestamp: number;
 }
 
@@ -243,6 +244,10 @@ export default function CreateEscrowForm({
     () => toLedgerTimestamp(draft.deadlineDate),
     [draft.deadlineDate]
   );
+  const selectedToken = useMemo(
+    () => getSupportedTokenByIssuer(draft.tokenAddress),
+    [draft.tokenAddress]
+  );
 
   const remainingAmount = useMemo(
     () => calculateRemainingAmount(draft.totalRent, draft.roommates),
@@ -333,6 +338,26 @@ export default function CreateEscrowForm({
       setIsSubmitting(true);
       setErrors([]);
 
+      const initializeResult = await activeClient.initialize({
+        totalRent: draft.totalRent,
+        tokenAddress: draft.tokenAddress.trim(),
+        deadlineLedgerTimestamp,
+      });
+
+      let lastMetadata = metadataFromResult(initializeResult);
+
+      for (const roommate of draft.roommates) {
+        const addRoommateResult = await addRoommateMethod({
+          roommateAddress: roommate.address.trim(),
+          shareAmount: roommate.shareAmount,
+        });
+
+        const roommateMetadata = metadataFromResult(addRoommateResult);
+        lastMetadata = {
+          ...lastMetadata,
+          ...roommateMetadata,
+        };
+      }
       // Call the mock service
       const result = await createEscrow();
       setSubmission(result);
@@ -545,7 +570,16 @@ export default function CreateEscrowForm({
               <span className="text-dark-500">Total rent:</span> {draft.totalRent}
             </p>
             <p>
-              <span className="text-dark-500">Payment token:</span> {draft.tokenId}
+              <span className="text-dark-500">Payment token:</span>{" "}
+              {selectedToken
+                ? `${selectedToken.name} (${selectedToken.symbol})`
+                : draft.tokenAddress}
+            </p>
+            <p>
+              <span className="text-dark-500">Token issuer:</span>{" "}
+              <span className="break-all font-mono text-xs sm:text-sm">
+                {draft.tokenAddress}
+              </span>
             </p>
             <p>
               <span className="text-dark-500">Deadline date:</span> {draft.deadlineDate}
