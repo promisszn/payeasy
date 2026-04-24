@@ -17,10 +17,13 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+import { getExplorerLink } from "@/lib/stellar/explorer";
 import { useStellar } from "@/context/StellarContext";
 import { PayEasyLogo } from "@/components/ui/payeasy-logo";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import FundTestnetButton from "@/components/wallet/FundTestnetButton";
+import { getFreighterNetwork } from "@/lib/stellar/wallet";
+import { getCurrentNetwork } from "@/lib/stellar/config";
 
 const FEATURES = [
   {
@@ -56,6 +59,8 @@ export default function ConnectWalletPage() {
   const [copied, setCopied] = useState(false);
   const [step, setStep] = useState<Step>("intro");
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [freighterNetwork, setFreighterNetwork] = useState<"TESTNET" | "MAINNET" | null>(null);
+  const [checkingNetwork, setCheckingNetwork] = useState(false);
 
   useEffect(() => {
     if (isConnected && publicKey) {
@@ -88,6 +93,19 @@ export default function ConnectWalletPage() {
   const confirmDisconnect = () => {
     setShowDisconnectConfirm(true);
   };
+  // Check Freighter network when connected
+  useEffect(() => {
+    if (isConnected && publicKey) {
+      setCheckingNetwork(true);
+      getFreighterNetwork()
+        .then(setFreighterNetwork)
+        .catch(() => setFreighterNetwork(null))
+        .finally(() => setCheckingNetwork(false));
+    } else {
+      setFreighterNetwork(null);
+    }
+  }, [isConnected, publicKey]);
+
 
   return (
     <main className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12 overflow-hidden">
@@ -322,6 +340,67 @@ export default function ConnectWalletPage() {
               <p className="text-dark-400 text-center mb-8">
                 You&apos;re ready to start using PayEasy.
               </p>
+              {/* Network badge */}
+              <div className="flex items-center justify-center gap-3 mb-6">
+                {(() => {
+                  const appNetwork = getCurrentNetwork();
+                  const isAppTestnet = appNetwork === "testnet";
+                  const badgeColor = isAppTestnet
+                    ? "bg-green-500/10 text-green-400 border-green-500/30"
+                    : "bg-amber-500/10 text-amber-400 border-amber-500/30";
+                  return (
+                    <div
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md`}
+                    >
+                      <div
+                        className={`h-2 w-2 rounded-full ${isAppTestnet ? "bg-green-400" : "bg-amber-400"} animate-pulse`}
+                      />
+                      {isAppTestnet ? "Testnet" : "Mainnet"}
+                    </div>
+                  );
+                })()}
+                {checkingNetwork && (
+                  <Loader2 className="h-4 w-4 text-dark-500 animate-spin" />
+                )}
+              </div>
+
+              {/* Network mismatch warning */}
+              {freighterNetwork !== null && (
+                <div className="mb-6">
+                  {(() => {
+                    const appNetwork = getCurrentNetwork();
+                    const isAppTestnet = appNetwork === "testnet";
+                    const isFreighterTestnet = freighterNetwork === "TESTNET";
+                    const mismatch = isAppTestnet !== isFreighterTestnet;
+                    
+                    if (mismatch) {
+                      return (
+                        <div className="glass-card p-4 border-red-500/20 bg-red-500/10">
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="text-red-300 text-sm font-semibold">
+                                Network mismatch
+                              </p>
+                              <p className="text-red-400 text-xs">
+                                Switch Freighter to {isAppTestnet ? "Testnet" : "Mainnet"}.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div className="flex items-center justify-center gap-2 text-sm text-accent-400">
+                        <div className="h-1.5 w-1.5 rounded-full bg-accent-400 animate-pulse" />
+                        Network synchronized
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
 
               {/* Address card */}
               <div className="w-full glass-card p-5 space-y-4 hover:!transform-none">
@@ -352,6 +431,16 @@ export default function ConnectWalletPage() {
                       <Copy size={18} className="text-dark-400" />
                     )}
                   </button>
+                  <a
+                    href={getExplorerLink("account", publicKey)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-3 rounded-xl glass hover:bg-white/10 transition-colors shrink-0"
+                    title="View on Stellar Expert"
+                    aria-label="View on Stellar Expert"
+                  >
+                    <ExternalLink size={18} className="text-dark-400" />
+                  </a>
                 </div>
 
                 {copied && (

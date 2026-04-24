@@ -90,3 +90,31 @@ export async function signTx(xdr: string, network?: string): Promise<string | nu
     return null;
   }
 }
+
+/**
+ * Gets the current network of the connected Freighter wallet.
+ * Returns "TESTNET" or "MAINNET" if connected and network can be determined.
+ * Returns null if Freighter is not available, not connected, or network cannot be determined.
+ */
+export async function getFreighterNetwork(): Promise<"TESTNET" | "MAINNET" | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    // Check if Freighter is connected
+    const connected = await isConnected();
+    if (!connected.isConnected) return null;
+
+    // Try to get the network from the Freighter API
+    const freighterModule = await import("@stellar/freighter-api");
+    if (typeof freighterModule.getNetwork === "function") {
+      const network = await freighterModule.getNetwork();
+      // Normalize to uppercase
+      return network.toUpperCase() as "TESTNET" | "MAINNET";
+    } else {
+      // Fallback: if getNetwork is not available, we cannot determine the network
+      return null;
+    }
+  } catch (error) {
+    console.error("Failed to get Freighter network:", error);
+    return null;
+  }
+}

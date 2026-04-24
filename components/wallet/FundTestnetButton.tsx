@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { fundTestnetAccount } from "@/lib/stellar/friendbot";
 import { getCurrentNetwork } from "@/lib/stellar/explorer";
 import { Coins, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { getAccountBalance } from "@/lib/stellar/queries";
 
 interface FundTestnetButtonProps {
   /**
@@ -20,14 +21,16 @@ interface FundTestnetButtonProps {
 /**
  * A button component that triggers testnet funding via Friendbot.
  * Automatically hides itself if the network is not set to testnet.
+ * After funding, polls for on-chain balance confirmation.
  */
 export default function FundTestnetButton({
   publicKey,
   onSuccess,
   className = "",
 }: FundTestnetButtonProps) {
-  const [fundingStatus, setFundingStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [fundingStatus, setFundingStatus] = useState<"idle" | "loading" | "confirming" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const isTestnet = getCurrentNetwork() === "testnet";
   
@@ -35,15 +38,75 @@ export default function FundTestnetButton({
     return null;
   }
 
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+      }
+    };
+  }, []);
+
   async function handleFund() {
-    if (fundingStatus === "loading" || !publicKey) return;
+    if (fundingStatus === "loading" || fundingStatus === "confirming" || !publicKey) return;
 
     try {
       setFundingStatus("loading");
       setErrorMessage("");
+      
+      // Trigger friendbot funding
       await fundTestnetAccount(publicKey);
-      setFundingStatus("success");
-      onSuccess?.();
+      
+      // Start polling for balance confirmation
+      setFundingStatus("confirming");
+      
+      let attempts = 0;
+      const maxAttempts = 5;
+      const pollInterval = 3000; // 3 seconds
+      
+      const pollForBalance = async (): Promise<boolean> => {
+        try {
+          const balance = await getAccountBalance(publicKey!);
+          // Friendbot provides 10,000 XLM, check for at least that threshold
+          return balance >= 10000;
+        } catch (err) {
+          // Ignore errors during polling, continue polling
+          return false;
+        }
+      };
+
+      // First immediate check after a short delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const firstCheck = await pollForBalance();
+      
+      if (firstCheck) {
+        setFundingStatus("success");
+        onSuccess?.();
+        return;
+      }
+
+      // Continue polling
+      pollTimerRef.current = setInterval(async () => {
+        attempts += 1;
+        const success = await pollForBalance();
+        
+        if (success) {
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
+          setFundingStatus("success");
+          onSuccess?.();
+        } else if (attempts >= maxAttempts) {
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
+          setFundingStatus("error");
+          setErrorMessage("Funding confirmation timeout. Please try again.");
+        }
+      }, pollInterval);
+      
     } catch (error) {
       setFundingStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Failed to fund account.");
@@ -55,7 +118,7 @@ export default function FundTestnetButton({
       <button
         type="button"
         onClick={handleFund}
-        disabled={fundingStatus === "loading" || !publicKey}
+        disabled={fundingStatus === "loading" || fundingStatus === "confirming" || !publicKey}
         className={`btn-primary w-full !justify-center !py-3 disabled:opacity-50 disabled:cursor-not-allowed group transition-all ${
           fundingStatus === "success" ? "!bg-accent-600/20 !text-accent-100 !border-accent-400" : ""
         }`}
@@ -65,10 +128,15 @@ export default function FundTestnetButton({
             <Loader2 className="h-5 w-5 animate-spin" />
             <span>Funding Account...</span>
           </>
+        ) : fundingStatus === "confirming" ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Confirming on-chain...</span>
+          </>
         ) : fundingStatus === "success" ? (
           <>
             <CheckCircle2 className="h-5 w-5" />
-            <span>Account Funded</span>
+            <span>10,000 XLM received</span>
           </>
         ) : (
           <>
