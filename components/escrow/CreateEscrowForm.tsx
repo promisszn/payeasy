@@ -13,7 +13,9 @@ import { useBeforeUnload } from "@/hooks/useBeforeUnload";
 import RoommateInput from "./RoommateInput";
 import { FieldError, fieldBorderClass } from "@/components/ui/field-error";
 import {
+  DUPLICATE_ROOMMATE_ADDRESS_MESSAGE,
   calculateRemainingAmount,
+  findDuplicateRoommateIds,
   formatFeeEstimate,
   hasExactShareAllocation,
   nextEscrowStep,
@@ -254,6 +256,12 @@ export default function CreateEscrowForm({
     [draft.totalRent, draft.roommates]
   );
 
+  const duplicateRoommateIds = useMemo(
+    () => findDuplicateRoommateIds(draft.roommates),
+    [draft.roommates]
+  );
+  const hasDuplicateRoommates = duplicateRoommateIds.size > 0;
+
   const currentStepLabel = STEP_LABELS[step - 1];
 
   function handleRoommateChange(
@@ -294,6 +302,10 @@ export default function CreateEscrowForm({
         setRoommateErrors(re);
         return;
       }
+      if (hasDuplicateRoommates) {
+        setErrors([DUPLICATE_ROOMMATE_ADDRESS_MESSAGE]);
+        return;
+      }
       const validation = validateEscrowStep(step, draft);
       if (!validation.isValid) {
         setErrors(validation.errors);
@@ -314,6 +326,11 @@ export default function CreateEscrowForm({
   }
 
   async function handleConfirm(): Promise<void> {
+    if (hasDuplicateRoommates) {
+      setErrors([DUPLICATE_ROOMMATE_ADDRESS_MESSAGE]);
+      return;
+    }
+
     const validation = validateEscrowStep(4, draft);
     if (!validation.isValid) {
       setErrors(validation.errors);
@@ -520,20 +537,37 @@ export default function CreateEscrowForm({
 
         {step === 3 ? (
           <>
+            {hasDuplicateRoommates && (
+              <div
+                role="alert"
+                data-testid="duplicate-roommate-toast"
+                className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-200 animate-fade-in"
+              >
+                {DUPLICATE_ROOMMATE_ADDRESS_MESSAGE}
+              </div>
+            )}
+
             <div className="space-y-4">
-              {draft.roommates.map((roommate, index) => (
-                <RoommateInput
-                  key={roommate.id}
-                  roommate={roommate}
-                  index={index}
-                  totalRent={draft.totalRent}
-                  onChange={handleRoommateChange}
-                  onRemove={handleRoommateRemove}
-                  disableRemove={draft.roommates.length === 1}
-                  errors={roommateErrors[roommate.id]}
-                  onClearError={clearRoommateError}
-                />
-              ))}
+              {draft.roommates.map((roommate, index) => {
+                const baseErrors = roommateErrors[roommate.id];
+                const effectiveErrors = duplicateRoommateIds.has(roommate.id)
+                  ? { ...baseErrors, address: DUPLICATE_ROOMMATE_ADDRESS_MESSAGE }
+                  : baseErrors;
+
+                return (
+                  <RoommateInput
+                    key={roommate.id}
+                    roommate={roommate}
+                    index={index}
+                    totalRent={draft.totalRent}
+                    onChange={handleRoommateChange}
+                    onRemove={handleRoommateRemove}
+                    disableRemove={draft.roommates.length === 1}
+                    errors={effectiveErrors}
+                    onClearError={clearRoommateError}
+                  />
+                );
+              })}
             </div>
 
             <button
@@ -657,7 +691,7 @@ export default function CreateEscrowForm({
           <button
             type="button"
             onClick={handleNext}
-            disabled={step === 3 && hasInvalidAddress}
+            disabled={step === 3 && hasDuplicateRoommates}
             className="btn-primary !px-5 !py-2.5 !text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Continue
@@ -668,7 +702,7 @@ export default function CreateEscrowForm({
             onClick={() => {
               void handleConfirm();
             }}
-            disabled={isSubmitting}
+            disabled={isSubmitting || hasDuplicateRoommates}
             className="btn-primary !px-5 !py-2.5 !text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isSubmitting ? "Submitting..." : "Create Escrow"}

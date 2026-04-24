@@ -80,6 +80,42 @@ export function hasExactShareAllocation(
   return Math.abs(sumRoommateShares(roommates) - total) <= AMOUNT_TOLERANCE;
 }
 
+export const DUPLICATE_ROOMMATE_ADDRESS_MESSAGE = "This address has already been added.";
+
+/**
+ * Returns the set of roommate IDs whose trimmed address duplicates an earlier
+ * entry's address. Blank addresses are ignored so pre-filled-but-empty rows
+ * don't collide with each other. Stellar addresses are case-sensitive, so
+ * comparison is exact after trimming.
+ */
+export function findDuplicateRoommateIds(
+  roommates: RoommateInputValue[]
+): Set<string> {
+  const seen = new Map<string, string>();
+  const duplicates = new Set<string>();
+
+  for (const roommate of roommates) {
+    const address = roommate.address.trim();
+    if (!address) continue;
+
+    const firstSeenId = seen.get(address);
+    if (firstSeenId === undefined) {
+      seen.set(address, roommate.id);
+      continue;
+    }
+
+    duplicates.add(roommate.id);
+  }
+
+  return duplicates;
+}
+
+export function hasDuplicateRoommateAddresses(
+  roommates: RoommateInputValue[]
+): boolean {
+  return findDuplicateRoommateIds(roommates).size > 0;
+}
+
 export function formatFeeEstimate(feeXlm: string | null | undefined): string {
   if (!feeXlm) {
     return "Fee unavailable";
