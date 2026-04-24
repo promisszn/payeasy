@@ -21,6 +21,8 @@ import Link from "next/link";
 import { useStellar } from "@/context/StellarContext";
 import { PayEasyLogo } from "@/components/ui/payeasy-logo";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { OnboardingCard } from "@/components/ui/onboarding-card";
+import { isOnboarded, markOnboarded } from "@/components/ui/onboarding-card.helpers";
 import FundTestnetButton from "@/components/wallet/FundTestnetButton";
 
 const FEATURES = [
@@ -58,16 +60,25 @@ export default function ConnectWalletPage() {
   const [step, setStep] = useState<Step>("intro");
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [errorExpanded, setErrorExpanded] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (isConnected && publicKey) {
       setStep("connected");
+      if (!isOnboarded()) {
+        setShowOnboarding(true);
+      }
     } else if (isConnecting) {
       setStep("connecting");
     } else {
       setStep("intro");
     }
   }, [isConnected, isConnecting, publicKey]);
+
+  const handleDismissOnboarding = () => {
+    markOnboarded();
+    setShowOnboarding(false);
+  };
 
   const handleConnect = async () => {
     setStep("connecting");
@@ -392,6 +403,13 @@ export default function ConnectWalletPage() {
               <div className="w-full mt-4">
                 <FundTestnetButton publicKey={publicKey} />
               </div>
+
+              {/* First-time onboarding prompt */}
+              {showOnboarding && (
+                <div className="w-full mt-4">
+                  <OnboardingCard onDismiss={handleDismissOnboarding} />
+                </div>
+              )}
 
               {/* Action buttons */}
               <div className="w-full grid grid-cols-2 gap-3 mt-6">
