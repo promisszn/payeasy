@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Wallet, Info, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Loader2, Wallet, Info, ArrowRight, CheckCircle2 } from "lucide-react";
 import useFreighter from "@/hooks/useFreighter.ts";
-import TransactionConfirmModal from "./TransactionConfirmModal.tsx";
+import TransactionReview from "@/components/wallet/TransactionReview.tsx";
 import { validateContributionAmount } from "./contributeForm.helpers.ts";
+import { buildContributeXdr, signAndSubmitContribute } from "@/lib/stellar/actions/contribute";
+
+type ContributePhase = "idle" | "building" | "review" | "submitting";
 
 interface ContributeFormProps {
   escrowId: string;
@@ -26,8 +29,8 @@ export default function ContributeForm({
   const { isConnected, connect, publicKey } = useFreighter();
   
   const [amount, setAmount] = useState(expectedShare);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [phase, setPhase] = useState<ContributePhase>("idle");
+  const [preparedXdr, setPreparedXdr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | undefined>(undefined);
 
@@ -35,7 +38,7 @@ export default function ContributeForm({
   const isValid = validation.isValid;
 
   const handleContributeClick = async () => {
-    if (!isConnected) {
+    if (!isConnected || !publicKey) {
       await connect();
       return;
     }
@@ -44,25 +47,44 @@ export default function ContributeForm({
       return;
     }
     setError(null);
-    setIsModalOpen(true);
+    setPhase("building");
+
+    try {
+      // amount is in XLM, we must convert to stroops for the contract
+      const stroopsAmount = BigInt(Math.floor(parseFloat(amount) * 1e7));
+      const xdr = await buildContributeXdr({
+        from: publicKey,
+        amount: stroopsAmount,
+        contractId: escrowId,
+      });
+      setPreparedXdr(xdr);
+      setPhase("review");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to prepare transaction.");
+      setPhase("idle");
+    }
   };
 
   const handleConfirm = async () => {
-    setIsSubmitting(true);
+    if (!preparedXdr || !publicKey) return;
+    setPhase("submitting");
     setError(null);
     try {
-      // Logic for submitting transaction would go here.
-      // For now, we simulate a successful transaction.
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const simulatedHash = "0x" + Math.random().toString(16).slice(2, 66);
-      
-      setTxHash(simulatedHash);
-      onSuccess?.(simulatedHash);
+      const result = await signAndSubmitContribute(preparedXdr, publicKey);
+      setTxHash(result.txHash);
+      onSuccess?.(result.txHash);
+      setPhase("idle");
+      setPreparedXdr(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Transaction failed.");
-    } finally {
-      setIsSubmitting(false);
+      setPhase("review"); // go back to review so they can try again or cancel
     }
+  };
+
+  const handleCancel = () => {
+    setPhase("idle");
+    setPreparedXdr(null);
+    setError(null);
   };
 
   return (
@@ -95,10 +117,15 @@ export default function ContributeForm({
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              aria-invalid={!isValid && parseFloat(amount) > 0}
+              aria-describedby={[
+                !isValid && parseFloat(amount) > 0 ? "amount-error" : undefined,
+                "amount-helper"
+              ].filter(Boolean).join(" ") || undefined}
               className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 pr-12 text-lg font-bold text-dark-100 focus:border-brand-400 focus:outline-none transition-all group-hover:bg-white/[0.08]"
               placeholder="0.00"
             />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-dark-500 font-black text-sm">
+            <div id="amount-helper" className="absolute right-4 top-1/2 -translate-y-1/2 text-dark-500 font-black text-sm">
               XLM
             </div>
           </div>
@@ -116,7 +143,7 @@ export default function ContributeForm({
       </div>
 
   {!isValid && parseFloat(amount) > 0 && (
-    <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 p-3 rounded-xl flex items-center gap-2">
+    <div id="amount-error" role="alert" className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 p-3 rounded-xl flex items-center gap-2">
       <ArrowRight className="h-3 w-3 rotate-180" />
       {validation.error}
     </div>
@@ -125,25 +152,42 @@ export default function ContributeForm({
       <button
         type="button"
         onClick={handleContributeClick}
-        disabled={!isValid || isSubmitting}
+        disabled={!isValid || phase !== "idle"}
         className="w-full btn-primary !py-4 !text-base shadow-xl shadow-brand-500/30 group disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {!isConnected ? "Connect Wallet to Pay" : "Contribute Now"}
-        <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+        {!isConnected ? (
+          "Connect Wallet to Pay"
+        ) : phase === "building" ? (
+          <>
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            Preparing Transaction...
+          </>
+        ) : (
+          <>
+            Contribute Now
+            <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+          </>
+        )}
       </button>
 
-      <TransactionConfirmModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onConfirm={handleConfirm}
-        title="Confirm Contribution"
-        description="You are about to send funds to the rent escrow contract. This action requires signature."
-        amount={amount}
-        fee="0.00001" // Simulated fee
-        isSubmitting={isSubmitting}
-        transactionHash={txHash}
-        error={error}
-      />
+      {(phase === "review" || phase === "submitting") && preparedXdr && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-dark-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md relative flex flex-col gap-4">
+            {error && (
+              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-sm text-red-200">
+                {error}
+              </div>
+            )}
+            <TransactionReview
+              xdr={preparedXdr}
+              network="TESTNET"
+              onConfirm={handleConfirm}
+              onCancel={handleCancel}
+              isSubmitting={phase === "submitting"}
+            />
+          </div>
+        </div>
+      )}
 
       {txHash && (
         <div className="mt-6 p-4 rounded-xl bg-accent-500/10 border border-accent-500/30 flex items-center gap-3 text-accent-100 text-sm animate-in fade-in slide-in-from-bottom-2">

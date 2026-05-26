@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { SUPPORTED_TOKENS } from "../../lib/stellar/config.ts";
+
 import {
+  DUPLICATE_ROOMMATE_ADDRESS_MESSAGE,
+  calculateRemainingAmount,
+  findDuplicateRoommateIds,
+  formatFeeEstimate,
+  hasDuplicateRoommateAddresses,
   nextEscrowStep,
   previousEscrowStep,
   toLedgerTimestamp,
@@ -12,7 +19,7 @@ import {
 function baseDraft(): EscrowFormDraft {
   return {
     totalRent: "1200",
-    tokenId: "XLM",
+    tokenAddress: SUPPORTED_TOKENS[0].issuer,
     deadlineDate: "2026-04-01",
     roommates: [
       { id: "a", address: "GAAA", shareAmount: "700" },
@@ -37,7 +44,7 @@ test("deadline date converts to unix ledger timestamp", () => {
 test("step 1 validation blocks empty token and non-positive rent", () => {
   const draft = baseDraft();
   draft.totalRent = "0";
-  draft.tokenId = "";
+  draft.tokenAddress = "";
 
   const result = validateEscrowStep(1, draft);
   assert.equal(result.isValid, false);
@@ -60,4 +67,104 @@ test("step 3 validation passes with exact allocation", () => {
   const result = validateEscrowStep(3, draft);
   assert.equal(result.isValid, true);
   assert.equal(result.errors.length, 0);
+});
+
+test("calculateRemainingAmount handles 3 roommates summing to total", () => {
+  const roommates = [
+    { id: "1", address: "G1", shareAmount: "300" },
+    { id: "2", address: "G2", shareAmount: "400" },
+    { id: "3", address: "G3", shareAmount: "300" },
+  ];
+  const remaining = calculateRemainingAmount("1000", roommates);
+  assert.equal(remaining, 0);
+});
+
+test("calculateRemainingAmount handles excess allocation", () => {
+  const roommates = [
+    { id: "1", address: "G1", shareAmount: "600" },
+    { id: "2", address: "G2", shareAmount: "500" },
+  ];
+  const remaining = calculateRemainingAmount("1000", roommates);
+  assert.equal(remaining, -100);
+});
+
+test("formatFeeEstimate renders the fee in the review step copy", () => {
+  assert.equal(
+    formatFeeEstimate("0.00001"),
+    "Estimated network fee: ~0.00001 XLM"
+  );
+});
+
+test("formatFeeEstimate falls back to 'Fee unavailable' when fee fetch fails", () => {
+  assert.equal(formatFeeEstimate(null), "Fee unavailable");
+  assert.equal(formatFeeEstimate(undefined), "Fee unavailable");
+  assert.equal(formatFeeEstimate(""), "Fee unavailable");
+});
+
+test("findDuplicateRoommateIds returns empty set when addresses are unique", () => {
+  const roommates = [
+    { id: "a", address: "GAAA", shareAmount: "100" },
+    { id: "b", address: "GBBB", shareAmount: "100" },
+  ];
+  assert.equal(findDuplicateRoommateIds(roommates).size, 0);
+});
+
+test("findDuplicateRoommateIds flags only the repeated entry (A entered twice keeps one)", () => {
+  const roommates = [
+    { id: "a", address: "GAAA", shareAmount: "100" },
+    { id: "b", address: "GAAA", shareAmount: "100" },
+  ];
+
+  const duplicates = findDuplicateRoommateIds(roommates);
+
+  // The first occurrence is considered the "one entry in state"; only the
+  // second is treated as a duplicate that must be resolved by the user.
+  assert.equal(duplicates.size, 1);
+  assert.ok(duplicates.has("b"));
+  assert.ok(!duplicates.has("a"));
+});
+
+test("findDuplicateRoommateIds ignores blank addresses and trims whitespace", () => {
+  const roommates = [
+    { id: "a", address: "GAAA", shareAmount: "100" },
+    { id: "b", address: "   ", shareAmount: "100" },
+    { id: "c", address: "", shareAmount: "100" },
+    { id: "d", address: "  GAAA  ", shareAmount: "100" },
+  ];
+
+  const duplicates = findDuplicateRoommateIds(roommates);
+  assert.equal(duplicates.size, 1);
+  assert.ok(duplicates.has("d"));
+});
+
+test("findDuplicateRoommateIds treats Stellar addresses as case-sensitive", () => {
+  const roommates = [
+    { id: "a", address: "GAAA", shareAmount: "100" },
+    { id: "b", address: "gaaa", shareAmount: "100" },
+  ];
+  assert.equal(findDuplicateRoommateIds(roommates).size, 0);
+});
+
+test("hasDuplicateRoommateAddresses reports true when any duplicate exists", () => {
+  assert.equal(
+    hasDuplicateRoommateAddresses([
+      { id: "a", address: "GAAA", shareAmount: "100" },
+      { id: "b", address: "GAAA", shareAmount: "100" },
+    ]),
+    true
+  );
+  assert.equal(
+    hasDuplicateRoommateAddresses([
+      { id: "a", address: "GAAA", shareAmount: "100" },
+      { id: "b", address: "GBBB", shareAmount: "100" },
+    ]),
+    false
+  );
+});
+
+test("duplicate toast copy matches the issue requirement", () => {
+  assert.equal(
+    DUPLICATE_ROOMMATE_ADDRESS_MESSAGE,
+    "This address has already been added."
+  );
 });

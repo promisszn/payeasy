@@ -50,12 +50,13 @@ function parseBalance(
  */
 export async function fetchAccountBalances(
   accountId: string,
-  network: NetworkType = "testnet"
+  network: NetworkType = "testnet",
+  server?: Horizon.Server
 ): Promise<AccountBalances> {
-  const server = getServer(network);
+  const horizonServer = server ?? getServer(network);
 
   try {
-    const account = await server.loadAccount(accountId);
+    const account = await horizonServer.loadAccount(accountId);
     return {
       accountId,
       balances: account.balances.map(parseBalance),
@@ -79,9 +80,10 @@ export async function fetchAccountBalances(
  */
 export async function fetchXlmBalance(
   accountId: string,
-  network: NetworkType = "testnet"
+  network: NetworkType = "testnet",
+  server?: Horizon.Server
 ): Promise<string> {
-  const { balances } = await fetchAccountBalances(accountId, network);
+  const { balances } = await fetchAccountBalances(accountId, network, server);
   const xlm = balances.find((b) => b.assetType === "native");
   return xlm?.balance ?? "0";
 }

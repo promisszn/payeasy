@@ -1,30 +1,24 @@
-import { Github, Twitter } from "lucide-react";
+import { Github } from "lucide-react";
 import Link from "next/link";
+import NetworkIndicator from "@/components/ui/network-indicator";
 
 const footerLinks = {
   Product: [
-    { name: "Find Roommates", href: "#" },
-    { name: "Escrow Dashboard", href: "#" },
-    { name: "Payment History", href: "#" },
-    { name: "Rent Builder", href: "#" },
+    { name: "Payment History", href: "/history" },
+    { name: "Rent Builder", href: "/escrow/create" },
   ],
   Resources: [
-    { name: "Documentation", href: "#" },
     { name: "Stellar Docs", href: "https://developers.stellar.org" },
-    { name: "API Reference", href: "#" },
-    { name: "Contributing", href: "/CONTRIBUTING.md" },
+    { name: "Contributing", href: "https://github.com/Ogstevyn/payeasy/blob/main/CONTRIBUTING.md" },
   ],
   Community: [
     { name: "GitHub", href: "https://github.com/Ogstevyn/payeasy" },
-    { name: "Discord", href: "#" },
-    { name: "Twitter", href: "#" },
-    { name: "Blog", href: "#" },
   ],
 };
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/5 pt-16 pb-8 px-6">
+    <footer aria-label="Footer" className="border-t border-white/5 pt-16 pb-8 px-6">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
@@ -51,13 +45,6 @@ export default function Footer() {
               >
                 <Github size={16} />
               </a>
-              <a
-                href="#"
-                className="w-9 h-9 rounded-lg glass flex items-center justify-center text-dark-400 hover:text-white hover:border-brand-500/30 transition-all"
-                aria-label="Twitter"
-              >
-                <Twitter size={16} />
-              </a>
             </div>
           </div>
 
@@ -70,12 +57,14 @@ export default function Footer() {
               <ul className="space-y-3">
                 {links.map((link) => (
                   <li key={link.name}>
-                    <a
+                    <Link
                       href={link.href}
+                      target={link.href.startsWith("http") ? "_blank" : undefined}
+                      rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
                       className="text-dark-500 hover:text-dark-300 transition-colors text-sm"
                     >
                       {link.name}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -89,12 +78,13 @@ export default function Footer() {
             &copy; {new Date().getFullYear()} PayEasy. Open source under MIT License.
           </p>
           <div className="flex items-center gap-6">
-            <a href="#" className="text-dark-600 hover:text-dark-400 text-xs transition-colors">
+            <NetworkIndicator />
+            <Link href="/privacy" className="text-dark-600 hover:text-dark-400 text-xs transition-colors">
               Privacy Policy
-            </a>
-            <a href="#" className="text-dark-600 hover:text-dark-400 text-xs transition-colors">
+            </Link>
+            <Link href="/terms" className="text-dark-600 hover:text-dark-400 text-xs transition-colors">
               Terms of Service
-            </a>
+            </Link>
           </div>
         </div>
       </div>

@@ -27,11 +27,11 @@ export interface ContributeResult {
 }
 
 /**
- * Build, sign, and submit a contribution transaction to the rent escrow contract.
+ * Builds the contribute transaction XDR, including simulating for footprint.
  */
-export async function contribute(
+export async function buildContributeXdr(
   params: ContributeParams
-): Promise<ContributeResult> {
+): Promise<string> {
   const { from, amount, contractId } = params;
   const server = new rpc.Server(SOROBAN_RPC_URL);
 
@@ -66,8 +66,20 @@ export async function contribute(
     simulated
   ).build();
 
+  return assembledTx.toXDR();
+}
+
+/**
+ * Signs the prepared XDR using Freighter and submits it to the network.
+ */
+export async function signAndSubmitContribute(
+  xdr: string,
+  from: string
+): Promise<ContributeResult> {
+  const server = new rpc.Server(SOROBAN_RPC_URL);
+
   // Sign with Freighter
-  const signedXdr = await signTx(assembledTx.toXDR(), "TESTNET");
+  const signedXdr = await signTx(xdr, "TESTNET");
   if (!signedXdr) {
     throw new Error("Transaction signing was rejected or failed");
   }
