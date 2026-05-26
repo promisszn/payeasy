@@ -10,8 +10,10 @@ import {
   Hash, 
   CheckCircle2, 
   Clock, 
-  AlertCircle 
+  AlertCircle,
+  RotateCcw
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { getExplorerLink } from "@/lib/stellar/explorer";
 
 export type TransactionType = "contribute" | "release" | "refund";
@@ -24,20 +26,34 @@ export interface Transaction {
   status: TransactionStatus;
   timestamp: string;
   txHash: string;
+  contractId?: string;
+  fee?: string;
+  sourceAccount?: string;
+  operationCount?: number;
+  operations?: Array<{
+    type: string;
+    from?: string;
+    to?: string;
+    amount?: string;
+    asset?: string;
+    function?: string;
+  }>;
+  memo?: string;
 }
 
 interface TransactionCardProps {
-  /**
-   * Transaction data to display.
-   */
   transaction: Transaction;
+  isNew?: boolean;
+  onClick?: (tx: Transaction) => void;
 }
 
 /**
  * A card component that displays an individual transaction's details.
  * Features specialized icons and color schemes based on the transaction type.
  */
-export default function TransactionCard({ transaction }: TransactionCardProps) {
+export default function TransactionCard({ transaction, isNew = false, onClick }: TransactionCardProps) {
+  const router = useRouter();
+
   const explorerLink = useMemo(() => {
     try {
       return getExplorerLink("transaction", transaction.txHash);
@@ -84,7 +100,10 @@ export default function TransactionCard({ transaction }: TransactionCardProps) {
   }[transaction.type];
 
   return (
-    <div className={`glass-card p-5 group transition-all duration-300 hover:border-white/20 active:scale-[0.98] shadow-lg ${config.shadow} hover:shadow-xl`}>
+    <div 
+      onClick={() => onClick?.(transaction)}
+      className={`glass-card p-5 group transition-all duration-300 hover:border-white/20 active:scale-[0.98] shadow-lg ${config.shadow} hover:shadow-xl cursor-pointer`}
+    >
       <div className="flex items-center gap-4">
         <div className={`p-3 rounded-2xl ${config.bg} ${config.color} border ${config.border} shadow-inner transition-transform group-hover:rotate-6 sm:group-hover:scale-110`}>
           {config.icon}
@@ -95,17 +114,24 @@ export default function TransactionCard({ transaction }: TransactionCardProps) {
             <p className="text-[10px] text-dark-500 uppercase tracking-widest font-black truncate">
               {config.label}
             </p>
-            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter border border-white/5 ${
-              transaction.status === "success" ? "bg-accent-500/10 text-accent-300" : 
-              transaction.status === "pending" ? "bg-blue-500/10 text-blue-300" : "bg-red-500/10 text-red-300"
-            }`}>
-              {transaction.status === "pending" ? <Clock className="h-2.5 w-2.5 animate-spin" /> : 
-               transaction.status === "failed" ? <AlertCircle className="h-2.5 w-2.5" /> : 
-               <CheckCircle2 className="h-2.5 w-2.5" />}
-              {transaction.status}
+            <div className="flex items-center gap-2">
+              {isNew && (
+                <span className="inline-flex items-center rounded-full border border-brand-400/40 bg-brand-500/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-tighter text-brand-200 animate-in fade-in duration-300">
+                  New
+                </span>
+              )}
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter border border-white/5 ${
+                transaction.status === "success" ? "bg-accent-500/10 text-accent-300" :
+                transaction.status === "pending" ? "bg-blue-500/10 text-blue-300" : "bg-red-500/10 text-red-300"
+              }`}>
+                {transaction.status === "pending" ? <Clock className="h-2.5 w-2.5 animate-spin" /> :
+                 transaction.status === "failed" ? <AlertCircle className="h-2.5 w-2.5" /> :
+                 <CheckCircle2 className="h-2.5 w-2.5" />}
+                {transaction.status}
+              </div>
             </div>
           </div>
-          <h4 className={`text-xl font-black tracking-tight mt-0.5 ${config.color}`}>
+          <h4 className={`text-xl font-black tracking-tight mt-0.5 truncate ${config.color}`}>
             {transaction.amount}
           </h4>
         </div>
@@ -121,24 +147,45 @@ export default function TransactionCard({ transaction }: TransactionCardProps) {
           </div>
         </div>
 
-        <a
-          href={explorerLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="p-3 rounded-xl bg-white/5 border border-white/5 text-dark-400 transition-all hover:bg-white/10 hover:text-brand-300 hover:border-brand-500/40 group/link"
-          aria-label="View on Stellar Explorer"
-        >
-          <ExternalLink className="h-5 w-5 transition-transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5" />
-        </a>
+        <div className="flex items-center gap-2">
+          {transaction.status === "failed" && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (transaction.contractId) {
+                  router.push(`/escrow/${transaction.contractId}`);
+                } else {
+                  // Fallback to create if no contract ID is found
+                  router.push("/escrow/create");
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Retry
+            </button>
+          )}
+
+          <a
+            href={explorerLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-3 rounded-xl bg-white/5 border border-white/5 text-dark-400 transition-all hover:bg-white/10 hover:text-brand-300 hover:border-brand-500/40 group/link"
+            aria-label="View on Stellar Explorer"
+          >
+            <ExternalLink className="h-5 w-5 transition-transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5" />
+          </a>
+        </div>
       </div>
       
       {/* Mobile view for extra details */}
-      <div className="mt-4 pt-4 border-t border-white/5 flex sm:hidden items-center justify-between text-[10px] text-dark-600 font-medium">
-        <div className="flex items-center gap-2">
-          <Calendar className="h-3 w-3 opacity-70" />
-          <span>{formattedDate}</span>
+      <div className="mt-4 pt-4 border-t border-white/5 flex sm:hidden items-center justify-between text-[10px] text-dark-600 font-medium overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0 pr-2">
+          <Calendar className="h-3 w-3 opacity-70 shrink-0" />
+          <span className="truncate">{formattedDate}</span>
         </div>
-        <div className="flex items-center gap-1.5 font-mono italic">
+        <div className="flex items-center gap-1.5 font-mono italic shrink-0">
           <Hash className="h-2.5 w-2.5 opacity-50" />
           <span>{transaction.txHash.slice(0, 12)}...</span>
         </div>

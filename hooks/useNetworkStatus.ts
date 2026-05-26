@@ -1,50 +1,39 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { getNetworkStatus, type HealthReport } from "@/lib/stellar/health";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { getNetworkHealth, type NetworkHealth, type NetworkStatus } from "@/lib/stellar/health";
 
-interface UseNetworkStatusOptions {
-  pollingInterval?: number;
-  autoStart?: boolean;
+const POLL_INTERVAL_MS = 5 * 60 * 1000;
+
+export interface UseNetworkStatusResult {
+  status: NetworkStatus;
+  checkedAt: Date | null;
+  isLoading: boolean;
 }
 
-/**
- * A hook that monitors and returns the current Soroban network status.
- * Automatically polls the RPC endpoint at a given interval.
- */
-export default function useNetworkStatus(options: UseNetworkStatusOptions = {}) {
-  const { pollingInterval = 30000, autoStart = true } = options;
+export function useNetworkStatus(): UseNetworkStatusResult {
+  const [health, setHealth] = useState<NetworkHealth | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [report, setReport] = useState<HealthReport>({
-    status: "healthy", // Initial optimistic state
-    latestLedger: 0,
-    timestamp: Date.now(),
-  });
-  const [isLoading, setIsLoading] = useState(false);
-
-  const refreshStatus = useCallback(async () => {
+  const check = useCallback(async () => {
     setIsLoading(true);
-    const newReport = await getNetworkStatus();
-    setReport(newReport);
+    const result = await getNetworkHealth();
+    setHealth(result);
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    if (!autoStart) return;
-
-    // Initial check
-    refreshStatus();
-
-    const timer = setInterval(refreshStatus, pollingInterval);
-    return () => clearInterval(timer);
-  }, [autoStart, pollingInterval, refreshStatus]);
+    check();
+    intervalRef.current = setInterval(check, POLL_INTERVAL_MS);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [check]);
 
   return {
-    ...report,
+    status: health?.status ?? "healthy",
+    checkedAt: health?.checkedAt ?? null,
     isLoading,
-    refresh: refreshStatus,
-    isOffline: report.status === "offline",
-    isDegraded: report.status === "degraded",
-    isHealthy: report.status === "healthy",
   };
 }

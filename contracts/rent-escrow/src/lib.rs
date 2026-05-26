@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, contracterror, symbol_short, token, Address, Env, Map, Symbol};
+use soroban_sdk::{contract, contractevent, contractimpl, contracttype, contracterror, symbol_short, token, Address, Env, Map};
 
 /// Minimum rent amount in stroops/token-units to prevent micro-escrow spam
 pub const MIN_RENT: i128 = 100;
@@ -64,7 +64,6 @@ pub struct RoommateState {
 #[derive(Clone)]
 pub struct RentEscrow {
     pub landlord: Address,
-    pub token: Address,
     pub token_address: Address,
     pub rent_amount: i128,
     pub roommates: Map<Address, RoommateState>,
@@ -81,15 +80,6 @@ pub struct RentEscrowContract;
 
 #[contractimpl]
 impl RentEscrowContract {
-    /// Initialize the escrow with landlord, token, rent amount, deadline, and roommates.
-    pub fn initialize(
-        env: Env,
-        landlord: Address,
-        token: Address,
-    pub fn initialize(
-        env: Env,
-        landlord: Address,
-        token: Address,
     /// Initialize the escrow with landlord, rent amount, and roommates.
     ///
     /// Reverts if `landlord` is the contract itself.
@@ -133,7 +123,6 @@ impl RentEscrowContract {
 
         env.storage().persistent().set(&DataKey::Escrow, &RentEscrow {
             landlord,
-            token,
             token_address,
             rent_amount,
             roommates: roommate_states,
@@ -197,9 +186,6 @@ impl RentEscrowContract {
             return Err(Error::Unauthorized);
         }
 
-        let token_client = token::TokenClient::new(&env, &escrow.token);
-        token_client.transfer(&from, &env.current_contract_address(), &amount);
-
         let mut state = escrow.roommates.get(from.clone()).unwrap();
         state.paid += amount;
         escrow.roommates.set(from.clone(), state);
@@ -218,26 +204,6 @@ impl RentEscrowContract {
         Ok(())
     }
 
-    /// Refund a roommate's contributed balance back to them.
-    pub fn refund(env: Env, roommate: Address) -> Result<(), Error> {
-        roommate.require_auth();
-        let mut escrow: RentEscrow = env.storage()
-            .persistent()
-            .get(&DataKey::Escrow)
-            .expect("escrow not initialized");
-        let state = escrow.roommates.get(roommate.clone()).ok_or(Error::Unauthorized)?;
-        let contributed = state.paid;
-        if contributed <= 0 {
-            return Err(Error::NothingToRefund);
-        }
-        let mut new_state = state.clone();
-        new_state.paid = 0;
-        escrow.roommates.set(roommate.clone(), new_state);
-        env.storage().persistent().set(&DataKey::Escrow, &escrow);
-        let token_client = token::TokenClient::new(&env, &escrow.token);
-        token_client.transfer(&env.current_contract_address(), &roommate, &contributed);
-        Ok(())
-    }
 
     /// Calculate the total amount funded by all roommates.
     pub fn get_total_funded(env: Env) -> i128 {
@@ -270,19 +236,12 @@ impl RentEscrowContract {
             .persistent()
             .get(&DataKey::Escrow)
             .expect("escrow not initialized");
-        let token_client = token::TokenClient::new(&env, &escrow.token);
-        let balance = token_client.balance(&env.current_contract_address());
-        if balance < escrow.rent_amount {
+        
+        let total_funded = Self::get_total_funded(env.clone());
+        if total_funded < escrow.rent_amount {
             return Err(Error::InsufficientFunding);
         }
-        token_client.transfer(&env.current_contract_address(), &escrow.landlord, &balance);
 
-        let escrow: RentEscrow = env.storage()
-            .persistent()
-            .get(&DataKey::Escrow)
-            .expect("escrow not initialized");
-
-        let total_funded = Self::get_total_funded(env.clone());
         let token_client = token::Client::new(&env, &escrow.token_address);
         token_client.transfer(&env.current_contract_address(), &escrow.landlord, &total_funded);
 

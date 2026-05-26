@@ -1,3 +1,5 @@
+import type { SupportedToken } from "../../lib/stellar/config.ts";
+
 export const MIN_ESCROW_STEP = 1;
 export const MAX_ESCROW_STEP = 4;
 
@@ -9,7 +11,7 @@ export interface RoommateInputValue {
 
 export interface EscrowFormDraft {
   totalRent: string;
-  tokenId: string;
+  tokenAddress: string;
   deadlineDate: string;
   roommates: RoommateInputValue[];
 }
@@ -53,9 +55,17 @@ export function toLedgerTimestamp(dateValue: string): number | null {
 
 export function sumRoommateShares(roommates: RoommateInputValue[]): number {
   return roommates.reduce((sum, roommate) => {
-    const amount = parsePositiveAmount(roommate.shareAmount);
-    return sum + (amount ?? 0);
+    const amount = Number(roommate.shareAmount);
+    return sum + (isNaN(amount) ? 0 : amount);
   }, 0);
+}
+
+export function calculateRemainingAmount(
+  totalRent: string,
+  roommates: RoommateInputValue[]
+): number {
+  const total = Number(totalRent) || 0;
+  return total - sumRoommateShares(roommates);
 }
 
 export function hasExactShareAllocation(
@@ -70,6 +80,41 @@ export function hasExactShareAllocation(
   return Math.abs(sumRoommateShares(roommates) - total) <= AMOUNT_TOLERANCE;
 }
 
+export function assignSupportedToken(
+  draft: EscrowFormDraft,
+  token: SupportedToken
+): EscrowFormDraft {
+  return { ...draft, tokenAddress: token.issuer };
+}
+
+export const DUPLICATE_ROOMMATE_ADDRESS_MESSAGE = "This address has already been added.";
+
+export function findDuplicateRoommateIds(roommates: RoommateInputValue[]): Set<string> {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const roommate of roommates) {
+    const trimmed = roommate.address.trim();
+    if (!trimmed) continue;
+    if (seen.has(trimmed)) {
+      duplicates.add(roommate.id);
+    } else {
+      seen.add(trimmed);
+    }
+  }
+  return duplicates;
+}
+
+export function hasDuplicateRoommateAddresses(roommates: RoommateInputValue[]): boolean {
+  return findDuplicateRoommateIds(roommates).size > 0;
+}
+
+export function formatFeeEstimate(feeXlm: string | null | undefined): string {
+  if (!feeXlm) {
+    return "Fee unavailable";
+  }
+  return `Estimated network fee: ~${feeXlm} XLM`;
+}
+
 export function validateEscrowStep(
   step: number,
   draft: EscrowFormDraft
@@ -82,8 +127,8 @@ export function validateEscrowStep(
       errors.push("Total rent must be greater than zero.");
     }
 
-    if (!draft.tokenId.trim()) {
-      errors.push("Select or enter a payment token.");
+    if (!draft.tokenAddress.trim()) {
+      errors.push("Select a supported payment token.");
     }
   }
 

@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 @layer base {
   * {
     margin: 0;
@@ -20,7 +16,7 @@
   }
 
   body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
     background-color: #0a0a0f;
     color: #f1f3f5;
     overflow-x: hidden;
@@ -28,17 +24,27 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-family: var(--font-space-grotesk), system-ui, sans-serif;
     letter-spacing: -0.035em;
   }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
   }
 
   ::selection {
     background-color: rgba(92, 124, 250, 0.3);
     color: #ffffff;
+  }
+
+  :focus-visible {
+    outline: 2px solid #5c7cfa !important;
+    outline-offset: 3px !important;
+  }
+
+  .light body {
+    background-color: #f8f9fa;
+    color: #212529;
   }
 }
 
@@ -154,10 +160,55 @@
     margin: 0 auto;
     max-width: 800px;
   }
+
+  .light .glass {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .light .glass-card {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  .light .glass-card:hover {
+    background: rgba(255, 255, 255, 0.8);
+    border-color: rgba(92, 124, 250, 0.5);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+  }
+
+  .light .text-dark-400 {
+    color: #6c757d;
+  }
+  
+  .light .text-dark-500 {
+    color: #495057;
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: 6px;
 }

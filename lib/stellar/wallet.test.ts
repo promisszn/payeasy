@@ -10,7 +10,9 @@ import assert from "node:assert/strict";
 import { 
   isFreighterInstalled, 
   checkConnection, 
-  getPublicKey 
+  getPublicKey,
+  normalizeFreighterNetwork,
+  isWalletNetworkMismatch,
 } from "./wallet.ts";
 
 test("isFreighterInstalled returns false in Node environment (no window)", async () => {
@@ -23,4 +25,16 @@ test("wallet utility functions handle errors gracefully", async () => {
   // These should not throw even if freighter is missing
   await assert.doesNotReject(checkConnection());
   await assert.doesNotReject(getPublicKey());
+});
+
+test("normalizeFreighterNetwork maps Freighter names to app names", () => {
+  assert.equal(normalizeFreighterNetwork("mainnet"), "MAINNET");
+  assert.equal(normalizeFreighterNetwork("pubnet"), "MAINNET");
+  assert.equal(normalizeFreighterNetwork("testnet"), "TESTNET");
+  assert.equal(normalizeFreighterNetwork("unknown"), null);
+});
+
+test("isWalletNetworkMismatch returns true for mainnet wallet on testnet app", () => {
+  assert.equal(isWalletNetworkMismatch("MAINNET", "testnet"), true);
+  assert.equal(isWalletNetworkMismatch("TESTNET", "testnet"), false);
 });

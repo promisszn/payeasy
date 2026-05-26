@@ -16,6 +16,8 @@ interface TransactionConfirmModalProps {
   error?: string | null;
 }
 
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+
 /**
  * A modal for confirming Stellar transactions.
  * Displays amount, estimated fee, and provides feedback during/after submission.
@@ -32,13 +34,20 @@ export default function TransactionConfirmModal({
   transactionHash,
   error,
 }: TransactionConfirmModalProps) {
+  const containerRef = useFocusTrap(isOpen, onClose);
+
   if (!isOpen) return null;
 
   const isSuccess = !!transactionHash;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-dark-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md glass-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+      <div 
+        ref={containerRef}
+        className="relative w-full max-w-md glass-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300"
+        role="dialog"
+        aria-modal="true"
+      >
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 text-dark-500 hover:text-white transition-colors"

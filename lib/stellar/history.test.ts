@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   fetchTransactionHistory,
   createTransactionHistoryPager,
+  createHorizonClient,
   parseTransaction,
   parseOperation,
   type HorizonClient,
@@ -390,4 +391,76 @@ test("createTransactionHistoryPager exposes current cursor via getCursor", async
   assert.equal(pager.getCursor(), undefined);
   await pager.fetchNext();
   assert.equal(pager.getCursor(), "pt-42");
+});
+
+test("history pagination loads first 10 then remaining 5 records", async () => {
+  const firstPage: HorizonTransactionPage = {
+    _embedded: {
+      records: Array.from({ length: 10 }, (_, index) =>
+        makeTxRecord({
+          id: `tx-${index + 1}`,
+          hash: `H-${index + 1}`,
+          paging_token: `pt-${index + 1}`,
+        })
+      ),
+    },
+    _links: {},
+  };
+
+  const secondPage: HorizonTransactionPage = {
+    _embedded: {
+      records: Array.from({ length: 5 }, (_, index) =>
+        makeTxRecord({
+          id: `tx-${index + 11}`,
+          hash: `H-${index + 11}`,
+          paging_token: `pt-${index + 11}`,
+        })
+      ),
+    },
+    _links: {},
+  };
+
+  const { client } = makeClient([firstPage, secondPage]);
+  const pager = createTransactionHistoryPager({
+    client,
+    accountId: "GACCT",
+    includeOperations: false,
+    limit: 10,
+    order: "desc",
+  });
+
+  const page1 = await pager.fetchNext();
+  const page2 = await pager.fetchNext();
+
+  assert.equal(page1.transactions.length, 10);
+  assert.equal(page2.transactions.length, 5);
+  assert.equal(page1.transactions[0].hash, "H-1");
+  assert.equal(page2.transactions[0].hash, "H-11");
+});
+
+test("createHorizonClient sends cursor parameter in transactions request", async () => {
+  const calls: string[] = [];
+
+  const client = createHorizonClient({
+    baseUrl: "https://horizon-testnet.stellar.org",
+    fetchFn: (async (input: string) => {
+      calls.push(input);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ _embedded: { records: [] }, _links: {} }),
+      } as Response;
+    }) as (input: string, init?: RequestInit) => Promise<Response>,
+  });
+
+  await client.fetchTransactions("GACCT", {
+    cursor: "pt-10",
+    limit: 10,
+    order: "desc",
+  });
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /cursor=pt-10/);
+  assert.match(calls[0], /limit=10/);
+  assert.match(calls[0], /order=desc/);
 });
